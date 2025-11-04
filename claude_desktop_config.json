@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "websee": {
+      "command": "node",
+      "args": [
+        "/Users/laptopname/Documents/Coding/MCPs/websee-source-intelligence-production/dist/mcp-server.js"
+      ],
+      "env": {
+        "BROWSER": "chromium",
+        "HEADLESS": "true"
+      }
+    }
+  }
+}

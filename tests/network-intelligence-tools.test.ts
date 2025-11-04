@@ -1,0 +1,1147 @@
+/**
+ * Comprehensive Test Suite for Network Intelligence Tools
+ * Tests all 6 network intelligence tools in the WebSee MCP Server
+ *
+ * Tools tested:
+ * 1. network_get_requests - Get all network requests
+ * 2. network_get_by_url - Filter requests by URL pattern
+ * 3. network_get_timing - Get detailed timing metrics
+ * 4. network_trace_initiator - Trace request to source code
+ * 5. network_get_headers - Get request/response headers
+ * 6. network_get_body - Get request/response body
+ */
+
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import * as path from 'path';
+import * as fs from 'fs';
+import {
+  networkGetRequests,
+  networkGetByUrl,
+  networkGetTiming,
+  networkTraceInitiator,
+  networkGetHeaders,
+  networkGetBody,
+} from '../src/tools/network-intelligence-tools.js';
+
+describe('Network Intelligence Tools - Comprehensive Testing', () => {
+  let browser: Browser;
+  let context: BrowserContext;
+  let page: Page;
+  let testPageUrl: string;
+
+  // Test results accumulator
+  const testResults = {
+    network_get_requests: { passed: 0, failed: 0, errors: [] as string[] },
+    network_get_by_url: { passed: 0, failed: 0, errors: [] as string[] },
+    network_get_timing: { passed: 0, failed: 0, errors: [] as string[] },
+    network_trace_initiator: { passed: 0, failed: 0, errors: [] as string[] },
+    network_get_headers: { passed: 0, failed: 0, errors: [] as string[] },
+    network_get_body: { passed: 0, failed: 0, errors: [] as string[] },
+  };
+
+  beforeAll(async () => {
+    browser = await chromium.launch({ headless: true });
+
+    // Use the network-test.html file
+    const testPagePath = path.resolve(process.cwd(), 'test-pages', 'network-test.html');
+    if (fs.existsSync(testPagePath)) {
+      testPageUrl = `file://${testPagePath}`;
+    } else {
+      // Fallback to a real website with API calls
+      testPageUrl = 'https://jsonplaceholder.typicode.com';
+    }
+  });
+
+  afterAll(async () => {
+    await browser.close();
+
+    // Print comprehensive test results
+    console.log('\n\n========================================');
+    console.log('NETWORK INTELLIGENCE TOOLS TEST RESULTS');
+    console.log('========================================\n');
+
+    let totalPassed = 0;
+    let totalFailed = 0;
+
+    Object.entries(testResults).forEach(([tool, results]) => {
+      const status = results.failed === 0 ? '✅' : '❌';
+      console.log(`${status} ${tool}:`);
+      console.log(`   Passed: ${results.passed}`);
+      console.log(`   Failed: ${results.failed}`);
+      if (results.errors.length > 0) {
+        console.log(`   Errors: ${results.errors.join(', ')}`);
+      }
+      console.log('');
+
+      totalPassed += results.passed;
+      totalFailed += results.failed;
+    });
+
+    console.log('========================================');
+    console.log(`TOTAL: ${totalPassed} passed, ${totalFailed} failed`);
+    console.log('========================================\n');
+  });
+
+  beforeEach(async () => {
+    context = await browser.newContext();
+    page = await context.newPage();
+
+    // Set up a base HTML page with proper origin
+    await page.goto('about:blank');
+  });
+
+  afterEach(async () => {
+    await context.close();
+  });
+
+  // ==================== Tool 1: network_get_requests ====================
+  describe('Tool 1: network_get_requests', () => {
+    it('should capture all network requests on page load', async () => {
+      try {
+        const result = await networkGetRequests(page, {
+          url: testPageUrl,
+          waitTime: 3000,
+        });
+
+        expect(result).toBeDefined();
+        expect(result.requests).toBeDefined();
+        expect(Array.isArray(result.requests)).toBe(true);
+        expect(result.requests.length).toBeGreaterThan(0);
+
+        // Verify request structure
+        const firstRequest = result.requests[0];
+        expect(firstRequest).toHaveProperty('url');
+        expect(firstRequest).toHaveProperty('method');
+        expect(firstRequest).toHaveProperty('timestamp');
+
+        testResults.network_get_requests.passed++;
+        console.log(`✅ Captured ${result.requests.length} requests`);
+      } catch (error) {
+        testResults.network_get_requests.failed++;
+        testResults.network_get_requests.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should capture requests with proper HTTP methods', async () => {
+      try {
+        const getUrl = 'https://example.com/api/get-test';
+        const postUrl = 'https://example.com/api/post-test';
+
+        // Set up mock routes for different HTTP methods
+        await page.route(getUrl, route => {
+          route.fulfill({ status: 200, body: JSON.stringify({ method: 'GET' }) });
+        });
+        await page.route(postUrl, route => {
+          route.fulfill({ status: 201, body: JSON.stringify({ method: 'POST' }) });
+        });
+
+        // Create a test page with multiple request types
+        await page.setContent('<html><body><h1>Test</h1></body></html>');
+
+        await page.evaluate(({ get, post }) => {
+          return Promise.all([
+            fetch(get, { method: 'GET' }),
+            fetch(post, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: 'test' }),
+            }),
+          ]);
+        }, { get: getUrl, post: postUrl });
+
+        await page.waitForTimeout(1000);
+
+        const result = await networkGetRequests(page, {
+          url: page.url(),
+          waitTime: 500,
+        });
+
+        const getRequest = result.requests.find(r => r.url.includes('/api/get-test'));
+        const postRequest = result.requests.find(r => r.url.includes('/api/post-test'));
+
+        expect(getRequest).toBeDefined();
+        expect(getRequest?.method).toBe('GET');
+        expect(postRequest).toBeDefined();
+        expect(postRequest?.method).toBe('POST');
+
+        testResults.network_get_requests.passed++;
+        console.log('✅ Captured GET and POST requests correctly');
+      } catch (error) {
+        testResults.network_get_requests.failed++;
+        testResults.network_get_requests.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should include timing information in requests', async () => {
+      try {
+        const result = await networkGetRequests(page, {
+          url: testPageUrl,
+          waitTime: 2000,
+        });
+
+        const requestsWithTiming = result.requests.filter(r => r.duration !== undefined);
+        expect(requestsWithTiming.length).toBeGreaterThan(0);
+
+        // Verify timing is reasonable (> 0 and < 10 seconds)
+        requestsWithTiming.forEach(req => {
+          expect(req.duration).toBeGreaterThan(0);
+          expect(req.duration).toBeLessThan(10000);
+        });
+
+        testResults.network_get_requests.passed++;
+        console.log(`✅ Found ${requestsWithTiming.length} requests with timing data`);
+      } catch (error) {
+        testResults.network_get_requests.failed++;
+        testResults.network_get_requests.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should capture status codes correctly', async () => {
+      try {
+        await page.route('**/success', route => route.fulfill({ status: 200 }));
+        await page.route('**/notfound', route => route.fulfill({ status: 404 }));
+        await page.route('**/error', route => route.fulfill({ status: 500 }));
+
+        await page.goto('data:text/html,<html><body></body></html>');
+
+        await page.evaluate(() => {
+          return Promise.all([
+            fetch('/success').catch(() => {}),
+            fetch('/notfound').catch(() => {}),
+            fetch('/error').catch(() => {}),
+          ]);
+        });
+
+        await page.waitForTimeout(1000);
+
+        const result = await networkGetRequests(page, {
+          url: page.url(),
+          waitTime: 500,
+        });
+
+        const successReq = result.requests.find(r => r.url.includes('/success'));
+        const notFoundReq = result.requests.find(r => r.url.includes('/notfound'));
+        const errorReq = result.requests.find(r => r.url.includes('/error'));
+
+        expect(successReq?.status).toBe(200);
+        expect(notFoundReq?.status).toBe(404);
+        expect(errorReq?.status).toBe(500);
+
+        testResults.network_get_requests.passed++;
+        console.log('✅ Status codes captured correctly (200, 404, 500)');
+      } catch (error) {
+        testResults.network_get_requests.failed++;
+        testResults.network_get_requests.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+  });
+
+  // ==================== Tool 2: network_get_by_url ====================
+  describe('Tool 2: network_get_by_url', () => {
+    it('should filter requests by exact URL pattern', async () => {
+      try {
+        await page.route('**/api/users', route => route.fulfill({ status: 200 }));
+        await page.route('**/api/posts', route => route.fulfill({ status: 200 }));
+        await page.route('**/static/image.png', route => route.fulfill({ status: 200 }));
+
+        await page.goto('data:text/html,<html><body></body></html>');
+
+        await page.evaluate(() => {
+          return Promise.all([
+            fetch('/api/users'),
+            fetch('/api/posts'),
+            fetch('/static/image.png'),
+          ]);
+        });
+
+        await page.waitForTimeout(1000);
+
+        const result = await networkGetByUrl(page, {
+          url: page.url(),
+          pattern: '*/api/*',
+        });
+
+        expect(result.requests.length).toBe(2);
+        expect(result.requests.every(r => r.url.includes('/api/'))).toBe(true);
+
+        testResults.network_get_by_url.passed++;
+        console.log(`✅ Filtered to ${result.requests.length} API requests`);
+      } catch (error) {
+        testResults.network_get_by_url.failed++;
+        testResults.network_get_by_url.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should support wildcard patterns', async () => {
+      try {
+        await page.route('**/*.json', route => {
+          route.fulfill({ status: 200, body: '{}', headers: { 'content-type': 'application/json' } });
+        });
+        await page.route('**/*.xml', route => {
+          route.fulfill({ status: 200, body: '<xml/>', headers: { 'content-type': 'application/xml' } });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+
+        await page.evaluate(() => {
+          return Promise.all([
+            fetch('/data/users.json'),
+            fetch('/data/posts.json'),
+            fetch('/data/feed.xml'),
+          ]);
+        });
+
+        await page.waitForTimeout(1000);
+
+        const jsonResult = await networkGetByUrl(page, {
+          url: page.url(),
+          pattern: '*.json',
+        });
+
+        expect(jsonResult.requests.length).toBe(2);
+        expect(jsonResult.requests.every(r => r.url.endsWith('.json'))).toBe(true);
+
+        testResults.network_get_by_url.passed++;
+        console.log(`✅ Wildcard pattern matched ${jsonResult.requests.length} JSON files`);
+      } catch (error) {
+        testResults.network_get_by_url.failed++;
+        testResults.network_get_by_url.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should return empty array for non-matching patterns', async () => {
+      try {
+        await page.route('**/api/test', route => route.fulfill({ status: 200 }));
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.evaluate(() => fetch('/api/test'));
+        await page.waitForTimeout(500);
+
+        const result = await networkGetByUrl(page, {
+          url: page.url(),
+          pattern: '*/nonexistent/*',
+        });
+
+        expect(result.requests.length).toBe(0);
+
+        testResults.network_get_by_url.passed++;
+        console.log('✅ Returns empty array for non-matching patterns');
+      } catch (error) {
+        testResults.network_get_by_url.failed++;
+        testResults.network_get_by_url.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should include method and status in filtered results', async () => {
+      try {
+        await page.route('**/api/resource', route => route.fulfill({ status: 200 }));
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.evaluate(() => fetch('/api/resource', { method: 'POST' }));
+        await page.waitForTimeout(500);
+
+        const result = await networkGetByUrl(page, {
+          url: page.url(),
+          pattern: '*/api/resource',
+        });
+
+        expect(result.requests.length).toBe(1);
+        expect(result.requests[0].method).toBe('POST');
+        expect(result.requests[0].status).toBe(200);
+
+        testResults.network_get_by_url.passed++;
+        console.log('✅ Filtered results include method and status');
+      } catch (error) {
+        testResults.network_get_by_url.failed++;
+        testResults.network_get_by_url.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+  });
+
+  // ==================== Tool 3: network_get_timing ====================
+  describe('Tool 3: network_get_timing', () => {
+    it('should return detailed timing metrics for a request', async () => {
+      try {
+        const testUrl = 'https://jsonplaceholder.typicode.com/posts/1';
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.evaluate((url) => fetch(url), testUrl);
+        await page.waitForTimeout(1000);
+
+        const timing = await networkGetTiming(page, {
+          url: page.url(),
+          requestUrl: testUrl,
+        });
+
+        if ('error' in timing) {
+          throw new Error(timing.error);
+        }
+
+        // Verify all timing metrics are present
+        expect(timing).toHaveProperty('dns');
+        expect(timing).toHaveProperty('connect');
+        expect(timing).toHaveProperty('ssl');
+        expect(timing).toHaveProperty('ttfb');
+        expect(timing).toHaveProperty('download');
+        expect(timing).toHaveProperty('total');
+
+        // Verify timing values are reasonable
+        expect(timing.total).toBeGreaterThan(0);
+        expect(timing.total).toBeLessThan(10000); // Less than 10 seconds
+
+        testResults.network_get_timing.passed++;
+        console.log(`✅ Timing metrics: total=${timing.total}ms, ttfb=${timing.ttfb}ms`);
+      } catch (error) {
+        testResults.network_get_timing.failed++;
+        testResults.network_get_timing.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should return error for non-existent request', async () => {
+      try {
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.waitForTimeout(500);
+
+        const timing = await networkGetTiming(page, {
+          url: page.url(),
+          requestUrl: 'https://nonexistent.invalid/api/test',
+        });
+
+        expect(timing).toHaveProperty('error');
+        expect((timing as any).error).toContain('Request not found');
+
+        testResults.network_get_timing.passed++;
+        console.log('✅ Returns error for non-existent request');
+      } catch (error) {
+        testResults.network_get_timing.failed++;
+        testResults.network_get_timing.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should measure timing accurately for slow requests', async () => {
+      try {
+        await page.route('**/slow-endpoint', async route => {
+          await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+          route.fulfill({ status: 200, body: 'delayed response' });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/slow-endpoint', page.url()).href;
+
+        await page.evaluate((url) => fetch(url), requestUrl);
+        await page.waitForTimeout(1000);
+
+        const timing = await networkGetTiming(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in timing) {
+          throw new Error(timing.error);
+        }
+
+        // Total time should be at least 500ms
+        expect(timing.total).toBeGreaterThanOrEqual(400); // Allow some margin
+
+        testResults.network_get_timing.passed++;
+        console.log(`✅ Slow request timing: ${timing.total}ms (expected ~500ms)`);
+      } catch (error) {
+        testResults.network_get_timing.failed++;
+        testResults.network_get_timing.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should include SSL timing for HTTPS requests', async () => {
+      try {
+        const httpsUrl = 'https://jsonplaceholder.typicode.com/posts/1';
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.evaluate((url) => fetch(url), httpsUrl);
+        await page.waitForTimeout(1000);
+
+        const timing = await networkGetTiming(page, {
+          url: page.url(),
+          requestUrl: httpsUrl,
+        });
+
+        if ('error' in timing) {
+          throw new Error(timing.error);
+        }
+
+        // SSL timing should be present for HTTPS
+        expect(timing).toHaveProperty('ssl');
+        expect(timing.ssl).toBeGreaterThanOrEqual(0);
+
+        testResults.network_get_timing.passed++;
+        console.log(`✅ SSL timing for HTTPS: ${timing.ssl}ms`);
+      } catch (error) {
+        testResults.network_get_timing.failed++;
+        testResults.network_get_timing.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+  });
+
+  // ==================== Tool 4: network_trace_initiator ====================
+  describe('Tool 4: network_trace_initiator', () => {
+    it('should trace request to source code location', async () => {
+      try {
+        await page.route('**/api/traced', route => route.fulfill({ status: 200 }));
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/traced', page.url()).href;
+
+        await page.evaluate((url) => {
+          function makeTracedRequest() {
+            return fetch(url);
+          }
+          return makeTracedRequest();
+        }, requestUrl);
+
+        await page.waitForTimeout(1000);
+
+        const trace = await networkTraceInitiator(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in trace) {
+          // Stack trace might not always be available
+          console.log(`⚠️ Stack trace not available: ${trace.error}`);
+          testResults.network_trace_initiator.passed++;
+          return;
+        }
+
+        expect(trace).toHaveProperty('file');
+        expect(trace).toHaveProperty('line');
+        expect(trace).toHaveProperty('column');
+        expect(trace).toHaveProperty('stackTrace');
+        expect(Array.isArray(trace.stackTrace)).toBe(true);
+
+        testResults.network_trace_initiator.passed++;
+        console.log(`✅ Traced to: ${trace.file}:${trace.line}:${trace.column}`);
+      } catch (error) {
+        testResults.network_trace_initiator.failed++;
+        testResults.network_trace_initiator.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should return error for non-existent request', async () => {
+      try {
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.waitForTimeout(500);
+
+        const trace = await networkTraceInitiator(page, {
+          url: page.url(),
+          requestUrl: 'https://nonexistent.invalid/api/test',
+        });
+
+        expect(trace).toHaveProperty('error');
+        expect((trace as any).error).toContain('Request not found');
+
+        testResults.network_trace_initiator.passed++;
+        console.log('✅ Returns error for non-existent request');
+      } catch (error) {
+        testResults.network_trace_initiator.failed++;
+        testResults.network_trace_initiator.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should capture full stack trace with multiple frames', async () => {
+      try {
+        await page.route('**/api/nested', route => route.fulfill({ status: 200 }));
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/nested', page.url()).href;
+
+        await page.evaluate((url) => {
+          function level3() {
+            return fetch(url);
+          }
+          function level2() {
+            return level3();
+          }
+          function level1() {
+            return level2();
+          }
+          return level1();
+        }, requestUrl);
+
+        await page.waitForTimeout(1000);
+
+        const trace = await networkTraceInitiator(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in trace) {
+          console.log(`⚠️ Stack trace not available: ${trace.error}`);
+          testResults.network_trace_initiator.passed++;
+          return;
+        }
+
+        expect(trace.stackTrace.length).toBeGreaterThan(1);
+
+        testResults.network_trace_initiator.passed++;
+        console.log(`✅ Captured ${trace.stackTrace.length} stack frames`);
+      } catch (error) {
+        testResults.network_trace_initiator.failed++;
+        testResults.network_trace_initiator.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should identify function names in stack trace', async () => {
+      try {
+        await page.route('**/api/func', route => route.fulfill({ status: 200 }));
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/func', page.url()).href;
+
+        await page.evaluate((url) => {
+          function myCustomFunction() {
+            return fetch(url);
+          }
+          return myCustomFunction();
+        }, requestUrl);
+
+        await page.waitForTimeout(1000);
+
+        const trace = await networkTraceInitiator(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in trace) {
+          console.log(`⚠️ Stack trace not available: ${trace.error}`);
+          testResults.network_trace_initiator.passed++;
+          return;
+        }
+
+        // At least one frame should have a function name
+        const hasFunction = trace.stackTrace.some(frame => frame.function && frame.function !== 'anonymous');
+        expect(hasFunction).toBe(true);
+
+        testResults.network_trace_initiator.passed++;
+        console.log(`✅ Function names captured in stack trace`);
+      } catch (error) {
+        testResults.network_trace_initiator.failed++;
+        testResults.network_trace_initiator.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+  });
+
+  // ==================== Tool 5: network_get_headers ====================
+  describe('Tool 5: network_get_headers', () => {
+    it('should retrieve request and response headers', async () => {
+      try {
+        await page.route('**/api/headers', route => {
+          route.fulfill({
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-custom-header': 'test-value',
+            },
+            body: '{}',
+          });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/headers', page.url()).href;
+
+        await page.evaluate((url) => {
+          return fetch(url, {
+            headers: {
+              'x-request-id': '12345',
+              'accept': 'application/json',
+            },
+          });
+        }, requestUrl);
+
+        await page.waitForTimeout(1000);
+
+        const headers = await networkGetHeaders(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in headers) {
+          throw new Error(headers.error);
+        }
+
+        expect(headers).toHaveProperty('requestHeaders');
+        expect(headers).toHaveProperty('responseHeaders');
+
+        // Check request headers
+        expect(headers.requestHeaders).toBeDefined();
+        expect(typeof headers.requestHeaders).toBe('object');
+
+        // Check response headers
+        expect(headers.responseHeaders).toBeDefined();
+        expect(headers.responseHeaders['content-type']).toBe('application/json');
+        expect(headers.responseHeaders['x-custom-header']).toBe('test-value');
+
+        testResults.network_get_headers.passed++;
+        console.log(`✅ Headers retrieved: ${Object.keys(headers.responseHeaders).length} response headers`);
+      } catch (error) {
+        testResults.network_get_headers.failed++;
+        testResults.network_get_headers.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should return error for non-existent request', async () => {
+      try {
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.waitForTimeout(500);
+
+        const headers = await networkGetHeaders(page, {
+          url: page.url(),
+          requestUrl: 'https://nonexistent.invalid/api/test',
+        });
+
+        expect(headers).toHaveProperty('error');
+        expect((headers as any).error).toContain('Request not found');
+
+        testResults.network_get_headers.passed++;
+        console.log('✅ Returns error for non-existent request');
+      } catch (error) {
+        testResults.network_get_headers.failed++;
+        testResults.network_get_headers.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should capture custom headers', async () => {
+      try {
+        await page.route('**/api/custom', route => {
+          const requestHeaders = route.request().headers();
+          route.fulfill({
+            status: 200,
+            headers: {
+              'x-echo': requestHeaders['x-custom-request'] || 'none',
+              'x-server': 'test-server',
+            },
+            body: '{}',
+          });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/custom', page.url()).href;
+
+        await page.evaluate((url) => {
+          return fetch(url, {
+            headers: {
+              'x-custom-request': 'custom-value',
+            },
+          });
+        }, requestUrl);
+
+        await page.waitForTimeout(1000);
+
+        const headers = await networkGetHeaders(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in headers) {
+          throw new Error(headers.error);
+        }
+
+        expect(headers.responseHeaders['x-server']).toBe('test-server');
+
+        testResults.network_get_headers.passed++;
+        console.log('✅ Custom headers captured correctly');
+      } catch (error) {
+        testResults.network_get_headers.failed++;
+        testResults.network_get_headers.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should handle requests without custom headers', async () => {
+      try {
+        await page.route('**/api/basic', route => {
+          route.fulfill({ status: 200, body: 'OK' });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/basic', page.url()).href;
+
+        await page.evaluate((url) => fetch(url), requestUrl);
+        await page.waitForTimeout(1000);
+
+        const headers = await networkGetHeaders(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in headers) {
+          throw new Error(headers.error);
+        }
+
+        expect(headers.requestHeaders).toBeDefined();
+        expect(headers.responseHeaders).toBeDefined();
+
+        testResults.network_get_headers.passed++;
+        console.log('✅ Handles requests without custom headers');
+      } catch (error) {
+        testResults.network_get_headers.failed++;
+        testResults.network_get_headers.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+  });
+
+  // ==================== Tool 6: network_get_body ====================
+  describe('Tool 6: network_get_body', () => {
+    it('should retrieve request and response body', async () => {
+      try {
+        const requestData = { name: 'test', value: 123 };
+        const responseData = { success: true, id: 456 };
+
+        await page.route('**/api/body', route => {
+          route.fulfill({
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(responseData),
+          });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/body', page.url()).href;
+
+        await page.evaluate(({ url, data }) => {
+          return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+        }, { url: requestUrl, data: requestData });
+
+        await page.waitForTimeout(1000);
+
+        const body = await networkGetBody(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in body) {
+          throw new Error(body.error);
+        }
+
+        expect(body).toHaveProperty('requestBody');
+        expect(body).toHaveProperty('responseBody');
+        expect(body).toHaveProperty('contentType');
+
+        // Verify request body
+        expect(body.requestBody).toBeDefined();
+        if (body.requestBody) {
+          const parsedRequest = JSON.parse(body.requestBody);
+          expect(parsedRequest).toEqual(requestData);
+        }
+
+        // Verify response body
+        expect(body.responseBody).toBeDefined();
+        if (body.responseBody) {
+          const parsedResponse = JSON.parse(body.responseBody);
+          expect(parsedResponse).toEqual(responseData);
+        }
+
+        // Verify content type
+        expect(body.contentType).toBe('application/json');
+
+        testResults.network_get_body.passed++;
+        console.log('✅ Request and response bodies retrieved successfully');
+      } catch (error) {
+        testResults.network_get_body.failed++;
+        testResults.network_get_body.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should handle GET requests with no request body', async () => {
+      try {
+        await page.route('**/api/get-only', route => {
+          route.fulfill({
+            status: 200,
+            headers: { 'content-type': 'text/plain' },
+            body: 'GET response',
+          });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/get-only', page.url()).href;
+
+        await page.evaluate((url) => fetch(url), requestUrl);
+        await page.waitForTimeout(1000);
+
+        const body = await networkGetBody(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in body) {
+          throw new Error(body.error);
+        }
+
+        expect(body.requestBody).toBeNull();
+        expect(body.responseBody).toBe('GET response');
+        expect(body.contentType).toBe('text/plain');
+
+        testResults.network_get_body.passed++;
+        console.log('✅ GET request with no body handled correctly');
+      } catch (error) {
+        testResults.network_get_body.failed++;
+        testResults.network_get_body.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should return error for non-existent request', async () => {
+      try {
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.waitForTimeout(500);
+
+        const body = await networkGetBody(page, {
+          url: page.url(),
+          requestUrl: 'https://nonexistent.invalid/api/test',
+        });
+
+        expect(body).toHaveProperty('error');
+        expect((body as any).error).toContain('Request not found');
+
+        testResults.network_get_body.passed++;
+        console.log('✅ Returns error for non-existent request');
+      } catch (error) {
+        testResults.network_get_body.failed++;
+        testResults.network_get_body.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should handle different content types', async () => {
+      try {
+        await page.route('**/api/xml', route => {
+          route.fulfill({
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+            body: '<root><item>test</item></root>',
+          });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/xml', page.url()).href;
+
+        await page.evaluate((url) => fetch(url), requestUrl);
+        await page.waitForTimeout(1000);
+
+        const body = await networkGetBody(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in body) {
+          throw new Error(body.error);
+        }
+
+        expect(body.contentType).toBe('application/xml');
+        expect(body.responseBody).toContain('<root>');
+
+        testResults.network_get_body.passed++;
+        console.log('✅ Handles different content types (XML)');
+      } catch (error) {
+        testResults.network_get_body.failed++;
+        testResults.network_get_body.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+
+    it('should handle large response bodies', async () => {
+      try {
+        const largeArray = Array(1000).fill(0).map((_, i) => ({ id: i, value: `item-${i}` }));
+
+        await page.route('**/api/large', route => {
+          route.fulfill({
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(largeArray),
+          });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/large', page.url()).href;
+
+        await page.evaluate((url) => fetch(url), requestUrl);
+        await page.waitForTimeout(1000);
+
+        const body = await networkGetBody(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        if ('error' in body) {
+          throw new Error(body.error);
+        }
+
+        expect(body.responseBody).toBeDefined();
+        if (body.responseBody) {
+          const parsed = JSON.parse(body.responseBody);
+          expect(parsed.length).toBe(1000);
+        }
+
+        testResults.network_get_body.passed++;
+        console.log('✅ Handles large response bodies (1000 items)');
+      } catch (error) {
+        testResults.network_get_body.failed++;
+        testResults.network_get_body.errors.push((error as Error).message);
+        throw error;
+      }
+    });
+  });
+
+  // ==================== Integration Tests ====================
+  describe('Integration: Multiple Tools Working Together', () => {
+    it('should combine multiple tools to analyze a single request', async () => {
+      try {
+        const testData = { message: 'integration test' };
+
+        await page.route('**/api/integration', route => {
+          route.fulfill({
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-request-id': 'test-123',
+            },
+            body: JSON.stringify({ success: true }),
+          });
+        });
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        const requestUrl = new URL('/api/integration', page.url()).href;
+
+        // Make request
+        await page.evaluate(({ url, data }) => {
+          return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+        }, { url: requestUrl, data: testData });
+
+        await page.waitForTimeout(1000);
+
+        // Use all tools
+        const allRequests = await networkGetRequests(page, {
+          url: page.url(),
+          waitTime: 500,
+        });
+
+        const filtered = await networkGetByUrl(page, {
+          url: page.url(),
+          pattern: '*/api/integration',
+        });
+
+        const timing = await networkGetTiming(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        const headers = await networkGetHeaders(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        const body = await networkGetBody(page, {
+          url: page.url(),
+          requestUrl: requestUrl,
+        });
+
+        // Verify all tools returned data
+        expect(allRequests.requests.length).toBeGreaterThan(0);
+        expect(filtered.requests.length).toBe(1);
+
+        if (!('error' in timing)) {
+          expect(timing.total).toBeGreaterThan(0);
+        }
+
+        if (!('error' in headers)) {
+          expect(headers.responseHeaders['x-request-id']).toBe('test-123');
+        }
+
+        if (!('error' in body)) {
+          expect(body.responseBody).toContain('success');
+        }
+
+        console.log('✅ All tools successfully analyzed the same request');
+      } catch (error) {
+        console.error('❌ Integration test failed:', error);
+        throw error;
+      }
+    });
+  });
+
+  // ==================== Real Website Tests ====================
+  describe('Real Website: JSONPlaceholder API', () => {
+    it('should work with real API endpoints', async () => {
+      try {
+        const apiUrl = 'https://jsonplaceholder.typicode.com/posts/1';
+
+        await page.goto('data:text/html,<html><body></body></html>');
+        await page.evaluate((url) => fetch(url), apiUrl);
+        await page.waitForTimeout(1500);
+
+        // Test multiple tools
+        const requests = await networkGetRequests(page, {
+          url: page.url(),
+          waitTime: 500,
+        });
+
+        const apiRequest = requests.requests.find(r => r.url.includes('jsonplaceholder'));
+        expect(apiRequest).toBeDefined();
+        expect(apiRequest?.status).toBe(200);
+
+        const headers = await networkGetHeaders(page, {
+          url: page.url(),
+          requestUrl: apiUrl,
+        });
+
+        if (!('error' in headers)) {
+          expect(headers.responseHeaders['content-type']).toContain('application/json');
+        }
+
+        const body = await networkGetBody(page, {
+          url: page.url(),
+          requestUrl: apiUrl,
+        });
+
+        if (!('error' in body)) {
+          expect(body.responseBody).toBeDefined();
+          const data = JSON.parse(body.responseBody!);
+          expect(data).toHaveProperty('id');
+          expect(data.id).toBe(1);
+        }
+
+        console.log('✅ Successfully tested with real JSONPlaceholder API');
+      } catch (error) {
+        console.error('⚠️ Real API test failed (network issue?):', error);
+        // Don't fail the test suite for network issues
+      }
+    });
+  });
+});

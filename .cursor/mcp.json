@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/schemas/mcp-config.json",
+  "mcpServers": {
+    "websee": {
+      "command": "node",
+      "args": ["./dist/mcp-server.js"],
+      "env": {
+        "BROWSER": "chromium",
+        "HEADLESS": "true",
+        "PROJECT_ROOT": "."
+      }
+    }
+  }
+}

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vanilla JS App with Bundle Problems - Test Fixture</title>
+
+  <!-- Simulate large bundle problem: Multiple large libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Inline script that could be code-split -->
+  <script>
+    // Large inline script that should be in a separate bundle
+    const LARGE_CONFIG = {
+      data: new Array(1000).fill(0).map((_, i) => ({
+        id: i,
+        value: Math.random() * 100,
+        label: `Item ${i}`,
+        description: `This is item number ${i} with some additional data`,
+      })),
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    .bundle-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .stat-label {
+      font-size: 14px;
+      opacity: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .warning-box {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .warning-box h3 {
+      margin-top: 0;
+      color: #856404;
+    }
+    .issue-list {
+      list-style: none;
+      padding: 0;
+    }
+    .issue-item {
+      background: #f8f9fa;
+      padding: 15px;
+      margin: 10px 0;
+      border-left: 4px solid #dc3545;
+      border-radius: 4px;
+    }
+    .issue-severity {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .severity-high {
+      background: #dc3545;
+      color: white;
+    }
+    .severity-medium {
+      background: #ffc107;
+      color: #000;
+    }
+    .severity-low {
+      background: #17a2b8;
+      color: white;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .dependency-tree {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+    canvas {
+      max-width: 100%;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Vanilla JS App with Bundle Problems</h1>
+    <p>This app demonstrates common bundle size and optimization issues.</p>
+
+    <div class="bundle-stats">
+      <div class="stat-card">
+        <div class="stat-label">Total Scripts</div>
+        <div class="stat-value" id="totalScripts">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Estimated Size</div>
+        <div class="stat-value" id="estimatedSize">0 KB</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Dependencies</div>
+        <div class="stat-value" id="dependencies">4</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Unused Code</div>
+        <div class="stat-value" id="unusedCode">~60%</div>
+      </div>
+    </div>
+
+    <div class="warning-box">
+      <h3>Bundle Optimization Issues Detected</h3>
+      <ul class="issue-list">
+        <li class="issue-item">
+          <strong>Large Vendor Bundles</strong>
+          <span class="issue-severity severity-high">HIGH</span>
+          <p>Multiple large libraries loaded (Lodash, Moment, Axios, Chart.js) - Total ~500KB</p>
+        </li>
+        <li class="issue-item">
+          <strong>No Code Splitting</strong>
+          <span class="issue-severity severity-high">HIGH</span>
+          <p>All JavaScript loaded upfront, no lazy loading or dynamic imports</p>
+        </li>
+        <li class="issue-item">
+          <strong>Tree Shaking Not Applied</strong>
+          <span class="issue-severity severity-medium">MEDIUM</span>
+          <p>Full libraries loaded instead of individual functions (e.g., entire Lodash vs specific functions)</p>
+        </li>
+        <li class="issue-item">
+          <strong>Large Inline Data</strong>
+          <span class="issue-severity severity-medium">MEDIUM</span>
+          <p>Large configuration object embedded in HTML instead of lazy loaded</p>
+        </li>
+        <li class="issue-item">
+          <strong>No Bundle Compression</strong>
+          <span class="issue-severity severity-low">LOW</span>
+          <p>Missing Brotli or Gzip compression headers</p>
+        </li>
+        <li class="issue-item">
+          <strong>Duplicate Dependencies</strong>
+          <span class="issue-severity severity-medium">MEDIUM</span>
+          <p>Multiple versions of utilities could be deduplicated</p>
+        </li>
+      </ul>
+    </div>
+
+    <div>
+      <h3>Actions</h3>
+      <button onclick="analyzeBundleSize()">Analyze Bundle Size</button>
+      <button onclick="testTreeShaking()">Test Tree Shaking</button>
+      <button onclick="loadUnnecessaryCode()">Load Unnecessary Code</button>
+      <button onclick="demonstrateCodeSplitting()">Demonstrate Code Splitting</button>
+      <button onclick="analyzeUnusedCode()">Analyze Unused Code</button>
+    </div>
+
+    <div id="results" style="margin-top: 20px;"></div>
+
+    <div>
+      <h3>Dependency Tree</h3>
+      <div class="dependency-tree">
+<pre id="dependencyTree">
+app.html
+├── lodash@4.17.21 (71.5 KB minified)
+│   └── Used: 5% (only _.debounce, _.throttle)
+│   └── Unused: 95% (~68 KB wasted)
+├── moment@2.29.4 (52.9 KB minified)
+│   └── Used: 10% (basic date formatting)
+│   └── Unused: 90% (~47 KB wasted - locales, timezone, etc.)
+├── axios@1.6.0 (13.3 KB minified)
+│   └── Used: 80% (core HTTP functionality)
+│   └── Unused: 20% (~3 KB wasted - interceptors, etc.)
+├── chart.js@4.4.0 (252 KB minified)
+│   └── Used: 30% (only bar charts)
+│   └── Unused: 70% (~176 KB wasted - other chart types)
+├── inline-config (50 KB)
+│   └── Could be lazy loaded
+└── duplicate-utilities (15 KB)
+    └── Functions duplicated across libraries
+
+Total: ~455 KB minified
+Wasted: ~309 KB (68%)
+Recommended: ~146 KB (with proper tree shaking and code splitting)
+</pre>
+      </div>
+    </div>
+
+    <div>
+      <h3>Bundle Size Visualization</h3>
+      <canvas id="bundleChart" width="400" height="200"></canvas>
+    </div>
+
+    <div id="unusedCodeAnalysis"></div>
+  </div>
+
+  <script>
+    // Update stats
+    function updateStats() {
+      const scripts = document.querySelectorAll('script[src]');
+      document.getElementById('totalScripts').textContent = scripts.length;
+
+      // Rough size estimation
+      const estimatedSizes = {
+        'lodash': 71.5,
+        'moment': 52.9,
+        'axios': 13.3,
+        'chart.js': 252,
+      };
+
+      let totalSize = 0;
+      scripts.forEach(script => {
+        const src = script.src;
+        Object.keys(estimatedSizes).forEach(lib => {
+          if (src.includes(lib)) {
+            totalSize += estimatedSizes[lib];
+          }
+        });
+      });
+
+      document.getElementById('estimatedSize').textContent = Math.round(totalSize) + ' KB';
+    }
+
+    function analyzeBundleSize() {
+      const results = document.getElementById('results');
+      results.innerHTML = `
+        <div class="warning-box">
+          <h3>Bundle Analysis Results</h3>
+          <p><strong>Total JavaScript:</strong> ~455 KB minified (~1.2 MB unminified)</p>
+          <p><strong>Main Thread Blocking Time:</strong> ~800ms on average device</p>
+          <p><strong>Time to Interactive:</strong> Estimated 2.5s (slow 3G)</p>
+          <h4>Recommendations:</h4>
+          <ul>
+            <li>Replace Moment.js with date-fns or native Intl API (save ~50 KB)</li>
+            <li>Use Lodash ES modules for tree shaking (save ~65 KB)</li>
+            <li>Code split Chart.js and load only when needed (defer ~250 KB)</li>
+            <li>Lazy load configuration data (defer ~50 KB)</li>
+            <li>Enable gzip/brotli compression (additional 70% reduction)</li>
+          </ul>
+        </div>
+      `;
+    }
+
+    function testTreeShaking() {
+      const results = document.getElementById('results');
+
+      // Only using a tiny fraction of Lodash
+      const debouncedFn = _.debounce(() => console.log('Debounced'), 300);
+      const throttledFn = _.throttle(() => console.log('Throttled'), 1000);
+
+      // Only using basic Moment features
+      const now = moment().format('YYYY-MM-DD');
+
+      results.innerHTML = `
+        <div class="warning-box">
+          <h3>Tree Shaking Analysis</h3>
+          <p><strong>Lodash Usage:</strong> Only 2 functions used out of 300+ (debounce, throttle)</p>
+          <p><strong>Potential Savings:</strong> ~68 KB by using individual imports</p>
+          <p><strong>Example:</strong></p>
+          <pre style="background: #f1f3f5; padding: 10px; border-radius: 4px;">
+// Instead of:
+import _ from 'lodash'
+
+// Use:
+import debounce from 'lodash/debounce'
+import throttle from 'lodash/throttle'
+          </pre>
+          <p><strong>Moment.js:</strong> Using only basic formatting, could use native Intl.DateTimeFormat</p>
+          <pre style="background: #f1f3f5; padding: 10px; border-radius: 4px;">
+// Instead of:
+moment().format('YYYY-MM-DD')
+
+// Use:
+new Intl.DateTimeFormat('en-US').format(new Date())
+          </pre>
+        </div>
+      `;
+    }
+
+    function loadUnnecessaryCode() {
+      // Simulate loading code that's never used
+      const unnecessaryData = [];
+
+      for (let i = 0; i < 1000; i++) {
+        unnecessaryData.push({
+          id: i,
+          data: new Array(100).fill(Math.random()),
+          timestamp: new Date(),
+          metadata: {
+            unused: 'This data is loaded but never accessed',
+            wastedMemory: true,
+          },
+        });
+      }
+
+      window.unnecessaryData = unnecessaryData; // Keep it in memory
+
+      const results = document.getElementById('results');
+      results.innerHTML = `
+        <div class="warning-box">
+          <h3>Unnecessary Code Loaded</h3>
+          <p>Just loaded 1000 objects with unused data into memory (~5 MB)</p>
+          <p>This represents code that's loaded but never executed or data that's never accessed.</p>
+          <p><strong>Impact:</strong></p>
+          <ul>
+            <li>Increased initial load time</li>
+            <li>Wasted bandwidth</li>
+            <li>Higher memory consumption</li>
+            <li>Slower parsing/compilation time</li>
+          </ul>
+        </div>
+      `;
+    }
+
+    function demonstrateCodeSplitting() {
+      const results = document.getElementById('results');
+      results.innerHTML = `
+        <div class="warning-box">
+          <h3>Code Splitting Opportunities</h3>
+          <p>Current: All code loaded upfront (~455 KB)</p>
+          <p>Recommended approach using dynamic imports:</p>
+          <pre style="background: #f1f3f5; padding: 10px; border-radius: 4px;">
+// Load Chart.js only when showing charts
+async function showChart() {
+  const Chart = await import('chart.js');
+  // Use Chart...
+}
+
+// Load Lodash functions individually
+async function processData() {
+  const { debounce } = await import('lodash-es');
+  // Use debounce...
+}
+          </pre>
+          <p><strong>Benefits:</strong></p>
+          <ul>
+            <li>Initial bundle: ~50 KB instead of ~455 KB</li>
+            <li>Load Chart.js only when user clicks "Show Chart"</li>
+            <li>Faster Time to Interactive</li>
+            <li>Better Core Web Vitals scores</li>
+          </ul>
+        </div>
+      `;
+    }
+
+    function analyzeUnusedCode() {
+      const results = document.getElementById('results');
+
+      // Check what's actually being used
+      const usedLodashFunctions = ['debounce', 'throttle'];
+      const totalLodashFunctions = Object.keys(_).length;
+      const lodashUsagePercent = ((usedLodashFunctions.length / totalLodashFunctions) * 100).toFixed(1);
+
+      results.innerHTML = `
+        <div class="warning-box">
+          <h3>Unused Code Analysis</h3>
+
+          <h4>Lodash</h4>
+          <p>Total functions: ${totalLodashFunctions}</p>
+          <p>Used functions: ${usedLodashFunctions.length} (${lodashUsagePercent}%)</p>
+          <p>Unused: ${totalLodashFunctions - usedLodashFunctions.length} functions (~${(100 - parseFloat(lodashUsagePercent)).toFixed(1)}%)</p>
+
+          <h4>Moment.js</h4>
+          <p>Used features: Basic date formatting only (~10%)</p>
+          <p>Unused: Locales (23 languages), timezone support, calendar functions (~90%)</p>
+
+          <h4>Chart.js</h4>
+          <p>Total chart types available: 8</p>
+          <p>Used chart types: 0 (loaded but not used yet)</p>
+          <p>Unused: 100% of the library!</p>
+
+          <h4>Overall Statistics</h4>
+          <p><strong>Total loaded:</strong> ~455 KB</p>
+          <p><strong>Actually used:</strong> ~145 KB</p>
+          <p><strong>Wasted:</strong> ~310 KB (68%)</p>
+
+          <p style="margin-top: 20px; padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">
+            <strong>💡 Tip:</strong> Use tools like webpack-bundle-analyzer, source-map-explorer, or Chrome DevTools Coverage tab to identify unused code in your bundles.
+          </p>
+        </div>
+      `;
+    }
+
+    // Create bundle visualization chart
+    function createBundleChart() {
+      const ctx = document.getElementById('bundleChart').getContext('2d');
+
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Lodash', 'Moment', 'Axios', 'Chart.js', 'Inline Config'],
+          datasets: [{
+            label: 'Used (KB)',
+            data: [3.5, 5.3, 10.6, 0, 0],
+            backgroundColor: 'rgba(40, 167, 69, 0.8)',
+          }, {
+            label: 'Unused (KB)',
+            data: [68, 47.6, 2.7, 252, 50],
+            backgroundColor: 'rgba(220, 53, 69, 0.8)',
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: 'Bundle Size Breakdown: Used vs Unused Code'
+            }
+          }
+        }
+      });
+    }
+
+    // Initialize
+    updateStats();
+    setTimeout(createBundleChart, 500); // Wait for Chart.js to load
+  </script>
+</body>
+</html>

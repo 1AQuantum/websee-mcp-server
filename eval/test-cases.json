@@ -1,0 +1,804 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WebSee MCP Server Evaluation Test Cases",
+  "description": "Comprehensive test cases for evaluating the WebSee MCP server following Anthropic's MCP builder standards",
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-26",
+  "testCases": [
+    {
+      "id": "eval-001",
+      "category": "Component Debugging",
+      "description": "Debug React component state issues by inspecting component props and state",
+      "tool": "inspect_component_state",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "selector": "#user-profile",
+        "waitForSelector": true,
+        "includeChildren": true
+      },
+      "expectedOutput": {
+        "fields": [
+          "selector",
+          "component",
+          "children"
+        ],
+        "conditions": [
+          {
+            "field": "component.name",
+            "type": "exists"
+          },
+          {
+            "field": "component.framework",
+            "type": "exists"
+          },
+          {
+            "field": "component.props",
+            "type": "exists"
+          },
+          {
+            "field": "component.state",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Component name is correctly identified",
+            "points": 20,
+            "validator": "output.component && output.component.name && output.component.name.length > 0"
+          },
+          {
+            "description": "Framework is detected (React/Vue/Angular)",
+            "points": 20,
+            "validator": "output.component && ['react', 'vue', 'angular'].includes(output.component.framework?.toLowerCase())"
+          },
+          {
+            "description": "Props are extracted and non-empty",
+            "points": 20,
+            "validator": "output.component && output.component.props && Object.keys(output.component.props).length > 0"
+          },
+          {
+            "description": "State is captured",
+            "points": 20,
+            "validator": "output.component && output.component.state !== undefined"
+          },
+          {
+            "description": "Child components are included when requested",
+            "points": 20,
+            "validator": "output.children && Array.isArray(output.children)"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 5000,
+        "expectedAccuracy": 90
+      },
+      "realWorldScenario": {
+        "problem": "User reports that profile page shows incorrect data after navigation",
+        "investigation": "Inspect UserProfile component state to see if userId prop is being passed correctly and state is updating",
+        "expectedFindings": [
+          "Component receives correct userId prop",
+          "State shows loading/loaded status",
+          "Child components (Avatar, ProfileInfo) are rendered with proper data"
+        ]
+      }
+    },
+    {
+      "id": "eval-002",
+      "category": "Network Analysis",
+      "description": "Identify and analyze slow network requests with timing information",
+      "tool": "analyze_performance",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "metrics": [
+          "network"
+        ]
+      },
+      "expectedOutput": {
+        "fields": [
+          "url",
+          "timestamp",
+          "metrics"
+        ],
+        "conditions": [
+          {
+            "field": "metrics.network",
+            "type": "exists"
+          },
+          {
+            "field": "metrics.network.totalRequests",
+            "type": "greaterThan",
+            "value": 0
+          },
+          {
+            "field": "metrics.network.averageDuration",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Total request count is captured",
+            "points": 15,
+            "validator": "output.metrics?.network?.totalRequests >= 0"
+          },
+          {
+            "description": "Slow requests are identified (>1000ms)",
+            "points": 25,
+            "validator": "output.metrics?.network?.slowRequests !== undefined"
+          },
+          {
+            "description": "Average duration is calculated",
+            "points": 20,
+            "validator": "output.metrics?.network?.averageDuration > 0"
+          },
+          {
+            "description": "Slowest requests are listed with details",
+            "points": 25,
+            "validator": "Array.isArray(output.metrics?.network?.slowestRequests) && output.metrics.network.slowestRequests.every(r => r.url && r.duration)"
+          },
+          {
+            "description": "Stack trace shows what triggered the request",
+            "points": 15,
+            "validator": "output.metrics?.network?.slowestRequests?.some(r => r.triggeredBy)"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 8000,
+        "expectedAccuracy": 95
+      },
+      "realWorldScenario": {
+        "problem": "Dashboard loads slowly and users complain about performance",
+        "investigation": "Analyze network requests to identify which API calls are taking longest",
+        "expectedFindings": [
+          "2-3 API calls taking over 1 second",
+          "Stack traces showing which components triggered slow requests",
+          "Average request duration above acceptable threshold"
+        ]
+      }
+    },
+    {
+      "id": "eval-003",
+      "category": "Error Resolution",
+      "description": "Resolve minified error stack traces to original source code locations",
+      "tool": "resolve_minified_error",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "errorStack": "Error: Cannot read property 'name' of undefined\n    at t.render (app.min.js:1:28473)",
+        "triggerError": false
+      },
+      "expectedOutput": {
+        "fields": [
+          "resolved",
+          "original",
+          "sourceMap"
+        ],
+        "conditions": [
+          {
+            "field": "resolved",
+            "type": "equals",
+            "value": true
+          },
+          {
+            "field": "sourceMap",
+            "type": "exists"
+          },
+          {
+            "field": "sourceMap",
+            "type": "arrayLength",
+            "value": 1
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Stack trace is successfully resolved",
+            "points": 30,
+            "validator": "output.resolved === true"
+          },
+          {
+            "description": "Original source file is identified",
+            "points": 25,
+            "validator": "output.sourceMap && output.sourceMap.some(line => line.includes('.tsx') || line.includes('.ts') || line.includes('.jsx') || line.includes('.js'))"
+          },
+          {
+            "description": "Line and column numbers are provided",
+            "points": 20,
+            "validator": "output.sourceMap && output.sourceMap.some(line => /:\\d+:\\d+/.test(line))"
+          },
+          {
+            "description": "Original error is preserved",
+            "points": 15,
+            "validator": "output.original && output.original.length > 0"
+          },
+          {
+            "description": "Source map resolution message is clear",
+            "points": 10,
+            "validator": "output.message && output.message.includes('source map')"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 6000,
+        "expectedAccuracy": 85
+      },
+      "realWorldScenario": {
+        "problem": "Production error monitoring shows cryptic stack traces from minified code",
+        "investigation": "Use source maps to resolve minified error back to original TypeScript source",
+        "expectedFindings": [
+          "Exact file path: src/components/UserProfile.tsx",
+          "Exact line number where error occurred",
+          "Original variable names instead of minified ones"
+        ]
+      }
+    },
+    {
+      "id": "eval-004",
+      "category": "Bundle Analysis",
+      "description": "Identify large modules in the JavaScript bundle that exceed size thresholds",
+      "tool": "analyze_bundle_size",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "moduleName": "lodash",
+        "threshold": 50
+      },
+      "expectedOutput": {
+        "fields": [
+          "url",
+          "scripts",
+          "stylesheets",
+          "modules",
+          "recommendations"
+        ],
+        "conditions": [
+          {
+            "field": "scripts.total",
+            "type": "greaterThan",
+            "value": 0
+          },
+          {
+            "field": "scripts.files",
+            "type": "exists"
+          },
+          {
+            "field": "recommendations",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Total script count is captured",
+            "points": 15,
+            "validator": "output.scripts && output.scripts.total >= 0"
+          },
+          {
+            "description": "Script files are listed with sources",
+            "points": 20,
+            "validator": "Array.isArray(output.scripts?.files) && output.scripts.files.length > 0"
+          },
+          {
+            "description": "Module search works when specified",
+            "points": 25,
+            "validator": "Array.isArray(output.modules) && (output.modules.length === 0 || output.modules[0].name)"
+          },
+          {
+            "description": "Size threshold recommendations are generated",
+            "points": 25,
+            "validator": "Array.isArray(output.recommendations)"
+          },
+          {
+            "description": "Stylesheets are analyzed",
+            "points": 15,
+            "validator": "output.stylesheets && output.stylesheets.total >= 0"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 7000,
+        "expectedAccuracy": 88
+      },
+      "realWorldScenario": {
+        "problem": "Initial page load is slow, lighthouse scores are poor",
+        "investigation": "Analyze bundle to find which libraries are making the bundle too large",
+        "expectedFindings": [
+          "lodash or moment.js contributing 50-100KB",
+          "Recommendations to use tree-shaking or lighter alternatives",
+          "Identification of duplicate dependencies"
+        ]
+      }
+    },
+    {
+      "id": "eval-005",
+      "category": "Interaction Tracing",
+      "description": "Trace network activity triggered by user interactions",
+      "tool": "trace_network_requests",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "pattern": "/api/*",
+        "method": "GET",
+        "waitTime": 3000
+      },
+      "expectedOutput": {
+        "fields": [
+          "url",
+          "pattern",
+          "method",
+          "totalRequests",
+          "requests"
+        ],
+        "conditions": [
+          {
+            "field": "totalRequests",
+            "type": "exists"
+          },
+          {
+            "field": "requests",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "URL pattern filtering works correctly",
+            "points": 25,
+            "validator": "output.pattern && output.requests.every(r => !output.pattern || r.url.includes(output.pattern.replace('*', '')))"
+          },
+          {
+            "description": "HTTP method filtering is applied",
+            "points": 20,
+            "validator": "output.method && (output.method === 'ALL' || output.requests.every(r => r.method === output.method))"
+          },
+          {
+            "description": "Request details include URL, method, status",
+            "points": 20,
+            "validator": "output.requests && output.requests.every(r => r.url && r.method && r.status !== undefined)"
+          },
+          {
+            "description": "Request timing information is captured",
+            "points": 20,
+            "validator": "output.requests && output.requests.every(r => r.duration !== undefined && r.timestamp)"
+          },
+          {
+            "description": "Stack traces show request origin",
+            "points": 15,
+            "validator": "output.requests && output.requests.some(r => r.triggeredBy)"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 6000,
+        "expectedAccuracy": 92
+      },
+      "realWorldScenario": {
+        "problem": "Need to understand which component is making redundant API calls",
+        "investigation": "Trace all /api/* requests to see which components trigger them",
+        "expectedFindings": [
+          "Multiple GET requests to same endpoint from different components",
+          "Stack traces showing exact component and line number",
+          "Timing information to identify sequential vs parallel requests"
+        ]
+      }
+    },
+    {
+      "id": "eval-006",
+      "category": "Memory Analysis",
+      "description": "Analyze memory usage and detect potential memory leaks",
+      "tool": "analyze_performance",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "metrics": [
+          "memory",
+          "components"
+        ]
+      },
+      "expectedOutput": {
+        "fields": [
+          "metrics"
+        ],
+        "conditions": [
+          {
+            "field": "metrics.memory",
+            "type": "exists"
+          },
+          {
+            "field": "metrics.components",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Memory metrics are captured",
+            "points": 30,
+            "validator": "output.metrics?.memory !== undefined && output.metrics?.memory !== null"
+          },
+          {
+            "description": "Heap size information is provided",
+            "points": 25,
+            "validator": "output.metrics?.memory && (output.metrics.memory.usedJSHeapSize || output.metrics.memory === null)"
+          },
+          {
+            "description": "Component count is tracked",
+            "points": 20,
+            "validator": "output.metrics?.components?.totalComponents >= 0"
+          },
+          {
+            "description": "Component nesting depth is analyzed",
+            "points": 15,
+            "validator": "output.metrics?.components?.deepestNesting >= 0"
+          },
+          {
+            "description": "Components grouped by framework",
+            "points": 10,
+            "validator": "output.metrics?.components?.byFramework && typeof output.metrics.components.byFramework === 'object'"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 7000,
+        "expectedAccuracy": 80
+      },
+      "realWorldScenario": {
+        "problem": "Application becomes sluggish after extended use, possible memory leak",
+        "investigation": "Monitor memory usage and component lifecycle to detect leaks",
+        "expectedFindings": [
+          "Heap size growing over time",
+          "Components not being properly unmounted",
+          "Event listeners not being cleaned up"
+        ]
+      }
+    },
+    {
+      "id": "eval-007",
+      "category": "Cross-Browser Testing",
+      "description": "Test frontend functionality across different browsers",
+      "tool": "debug_frontend_issue",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "selector": "#main-content",
+        "screenshot": false
+      },
+      "expectedOutput": {
+        "fields": [
+          "url",
+          "timestamp",
+          "issues",
+          "components",
+          "network",
+          "console"
+        ],
+        "conditions": [
+          {
+            "field": "console",
+            "type": "exists"
+          },
+          {
+            "field": "network",
+            "type": "exists"
+          },
+          {
+            "field": "issues",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Console errors and warnings are captured",
+            "points": 25,
+            "validator": "Array.isArray(output.console)"
+          },
+          {
+            "description": "Network requests are tracked",
+            "points": 20,
+            "validator": "Array.isArray(output.network) && output.network.length >= 0"
+          },
+          {
+            "description": "Component information is extracted",
+            "points": 20,
+            "validator": "Array.isArray(output.components)"
+          },
+          {
+            "description": "Issues are identified and categorized",
+            "points": 20,
+            "validator": "Array.isArray(output.issues)"
+          },
+          {
+            "description": "Timestamp for debugging timeline",
+            "points": 15,
+            "validator": "output.timestamp && new Date(output.timestamp).getTime() > 0"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 8000,
+        "expectedAccuracy": 90
+      },
+      "realWorldScenario": {
+        "problem": "Feature works in Chrome but fails in Safari",
+        "investigation": "Run debug tool in both browsers to compare console errors and component state",
+        "expectedFindings": [
+          "Safari-specific console errors",
+          "Different network behavior between browsers",
+          "Component rendering differences"
+        ]
+      }
+    },
+    {
+      "id": "eval-008",
+      "category": "Performance Optimization",
+      "description": "Identify performance bottlenecks in frontend applications",
+      "tool": "analyze_performance",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "metrics": [
+          "network",
+          "bundle",
+          "components"
+        ],
+        "interactions": [
+          {
+            "action": "scroll",
+            "selector": null,
+            "value": null
+          }
+        ]
+      },
+      "expectedOutput": {
+        "fields": [
+          "metrics"
+        ],
+        "conditions": [
+          {
+            "field": "metrics.network",
+            "type": "exists"
+          },
+          {
+            "field": "metrics.bundle",
+            "type": "exists"
+          },
+          {
+            "field": "metrics.components",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Network performance metrics are comprehensive",
+            "points": 30,
+            "validator": "output.metrics?.network && output.metrics.network.totalRequests >= 0 && output.metrics.network.averageDuration >= 0"
+          },
+          {
+            "description": "Bundle size analysis is performed",
+            "points": 25,
+            "validator": "output.metrics?.bundle && output.metrics.bundle.totalScripts >= 0"
+          },
+          {
+            "description": "Largest scripts are identified",
+            "points": 20,
+            "validator": "Array.isArray(output.metrics?.bundle?.largestScripts)"
+          },
+          {
+            "description": "Component metrics show optimization opportunities",
+            "points": 15,
+            "validator": "output.metrics?.components?.totalComponents >= 0 && output.metrics.components.deepestNesting >= 0"
+          },
+          {
+            "description": "User interactions are properly executed",
+            "points": 10,
+            "validator": "output.url && output.timestamp"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 10000,
+        "expectedAccuracy": 85
+      },
+      "realWorldScenario": {
+        "problem": "Application feels sluggish, need to find all bottlenecks",
+        "investigation": "Comprehensive performance analysis across multiple dimensions",
+        "expectedFindings": [
+          "Slow network requests identified",
+          "Large bundle sizes requiring code splitting",
+          "Deep component nesting causing re-render issues"
+        ]
+      }
+    },
+    {
+      "id": "eval-009",
+      "category": "Component Architecture",
+      "description": "Analyze component hierarchy and relationships",
+      "tool": "analyze_performance",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "metrics": [
+          "components"
+        ]
+      },
+      "expectedOutput": {
+        "fields": [
+          "metrics.components"
+        ],
+        "conditions": [
+          {
+            "field": "metrics.components.totalComponents",
+            "type": "exists"
+          },
+          {
+            "field": "metrics.components.byFramework",
+            "type": "exists"
+          },
+          {
+            "field": "metrics.components.deepestNesting",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Total component count is accurate",
+            "points": 30,
+            "validator": "output.metrics?.components?.totalComponents >= 0"
+          },
+          {
+            "description": "Components are grouped by framework",
+            "points": 25,
+            "validator": "output.metrics?.components?.byFramework && typeof output.metrics.components.byFramework === 'object'"
+          },
+          {
+            "description": "Nesting depth is calculated",
+            "points": 25,
+            "validator": "output.metrics?.components?.deepestNesting >= 0"
+          },
+          {
+            "description": "Framework detection is working",
+            "points": 20,
+            "validator": "output.metrics?.components?.byFramework && Object.keys(output.metrics.components.byFramework).length >= 0"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 6000,
+        "expectedAccuracy": 88
+      },
+      "realWorldScenario": {
+        "problem": "Need to refactor component architecture, want to understand current structure",
+        "investigation": "Analyze component tree to identify over-nesting and framework usage",
+        "expectedFindings": [
+          "Total number of components in the tree",
+          "Distribution across React/Vue/Angular",
+          "Maximum nesting depth indicating potential architectural issues"
+        ]
+      }
+    },
+    {
+      "id": "eval-010",
+      "category": "Build Optimization",
+      "description": "Generate actionable recommendations for build optimization",
+      "tool": "analyze_bundle_size",
+      "input": {
+        "url": "http://localhost:3000/app",
+        "threshold": 100
+      },
+      "expectedOutput": {
+        "fields": [
+          "recommendations"
+        ],
+        "conditions": [
+          {
+            "field": "recommendations",
+            "type": "exists"
+          },
+          {
+            "field": "scripts",
+            "type": "exists"
+          }
+        ]
+      },
+      "scoring": {
+        "maxPoints": 100,
+        "criteria": [
+          {
+            "description": "Recommendations are generated",
+            "points": 30,
+            "validator": "Array.isArray(output.recommendations)"
+          },
+          {
+            "description": "Recommendations are actionable and specific",
+            "points": 25,
+            "validator": "output.recommendations && output.recommendations.every(r => typeof r === 'string' && r.length > 20)"
+          },
+          {
+            "description": "Threshold-based warnings are included",
+            "points": 20,
+            "validator": "output.recommendations && output.recommendations.some(r => r.includes('KB') || r.includes('threshold'))"
+          },
+          {
+            "description": "Code splitting suggestions when appropriate",
+            "points": 15,
+            "validator": "output.recommendations && (output.recommendations.length === 0 || output.recommendations.some(r => r.toLowerCase().includes('split')))"
+          },
+          {
+            "description": "Total bundle size is calculated",
+            "points": 10,
+            "validator": "output.scripts && output.scripts.totalSize >= 0"
+          }
+        ]
+      },
+      "performanceBenchmark": {
+        "maxResponseTime": 7000,
+        "expectedAccuracy": 85
+      },
+      "realWorldScenario": {
+        "problem": "Need to optimize build for production deployment",
+        "investigation": "Analyze bundle and get specific recommendations for optimization",
+        "expectedFindings": [
+          "Specific size thresholds exceeded",
+          "Recommendations for code splitting strategies",
+          "Identification of optimization opportunities"
+        ]
+      }
+    }
+  ],
+  "evaluationCriteria": {
+    "passingScore": 70,
+    "description": "Test cases are considered passing if they achieve at least 70% of maximum points",
+    "categories": [
+      "Component Debugging",
+      "Network Analysis",
+      "Error Resolution",
+      "Bundle Analysis",
+      "Interaction Tracing",
+      "Memory Analysis",
+      "Cross-Browser Testing",
+      "Performance Optimization",
+      "Component Architecture",
+      "Build Optimization"
+    ]
+  },
+  "performanceStandards": {
+    "responseTime": {
+      "excellent": "< 3000ms",
+      "good": "< 5000ms",
+      "acceptable": "< 8000ms",
+      "poor": "> 8000ms"
+    },
+    "accuracy": {
+      "excellent": "> 95%",
+      "good": "> 85%",
+      "acceptable": "> 70%",
+      "poor": "< 70%"
+    }
+  },
+  "metadata": {
+    "author": "WebSee Development Team",
+    "conformsTo": "Anthropic MCP Builder Standards v1.0",
+    "testingFramework": "Custom TypeScript Evaluation Engine",
+    "requiredDependencies": [
+      "playwright",
+      "@modelcontextprotocol/sdk",
+      "typescript"
+    ]
+  }
+}

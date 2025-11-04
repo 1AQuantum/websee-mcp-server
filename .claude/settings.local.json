@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Read(//Users/laptopname/Documents/Coding/MCPs/WebSee/**)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(test:*)",
+      "Bash(find:*)",
+      "Bash(npm audit:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "websee"
+  ],
+  "disabledMcpjsonServers": [
+    "websee"
+  ]
+}

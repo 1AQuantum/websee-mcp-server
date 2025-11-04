@@ -1,0 +1,206 @@
+
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+COMPONENT INTELLIGENCE TOOLS TEST REPORT
+================================================================================
+
+Total Tests: 21
+Passed: 8
+Failed: 13
+Skipped: 0
+Success Rate: 38.10%
+Component Detection Rate: 0.00%
+
+--------------------------------------------------------------------------------
+DETAILED RESULTS
+--------------------------------------------------------------------------------
+
+1. component_tree - Local React Test Page
+   Status: PASSED
+   Duration: 3775.00ms
+   Components Found: 0
+   Sample Output: {
+  "totalComponents": 0,
+  "frameworks": []
+}...
+
+2. component_tree - Filter by React framework
+   Status: FAILED
+   Duration: 3686.00ms
+   Error: expected [] to include 'react'
+
+3. component_tree - Include depth information
+   Status: PASSED
+   Duration: 3786.00ms
+   Components Found: 0
+   Sample Output: {}...
+
+4. component_get_props - Counter component props
+   Status: FAILED
+   Duration: 4222.00ms
+   Error: No component found at selector: .counter
+
+5. component_get_props - Non-existent selector error handling
+   Status: PASSED
+   Duration: 4386.00ms
+
+6. component_get_state - Counter component state
+   Status: FAILED
+   Duration: 4312.00ms
+   Error: No component found at selector: .counter
+
+7. component_get_state - State changes after interaction
+   Status: FAILED
+   Duration: 4386.00ms
+   Error: No component found at selector: .counter
+
+8. component_find_by_name - Find Counter components
+   Status: PASSED
+   Duration: 3386.00ms
+   Components Found: 0
+   Sample Output: {
+  "count": 0
+}...
+
+9. component_find_by_name - Find UserList components
+   Status: PASSED
+   Duration: 3888.00ms
+   Components Found: 0
+
+10. component_find_by_name - Non-existent component name
+   Status: PASSED
+   Duration: 3560.00ms
+   Components Found: 0
+
+11. component_get_source - Counter component source mapping
+   Status: FAILED
+   Duration: 4023.00ms
+   Error: No component found at selector: .counter
+
+12. component_get_source - Framework detection without source maps
+   Status: FAILED
+   Duration: 3811.00ms
+   Error: No component found at selector: .counter
+
+13. component_track_renders - Track Counter renders over 3 seconds
+   Status: FAILED
+   Duration: 4097.00ms
+   Error: No component found at selector: .counter
+
+14. component_track_renders - Track renders with 1 second duration
+   Status: FAILED
+   Duration: 3998.00ms
+   Error: No component found at selector: .counter
+
+15. component_get_context - Get context values for Counter
+   Status: FAILED
+   Duration: 4178.00ms
+   Error: No component found at selector: .counter
+
+16. component_get_context - Handle components without context
+   Status: FAILED
+   Duration: 4033.00ms
+   Error: No component found at selector: .counter
+
+17. component_get_hooks - Get hooks for Counter
+   Status: FAILED
+   Duration: 4045.00ms
+   Error: No component found at selector: .counter
+
+18. component_get_hooks - Identify hook types
+   Status: FAILED
+   Duration: 4017.00ms
+   Error: No component found at selector: .counter
+
+19. component_get_hooks - Error handling for non-React components
+   Status: PASSED
+   Duration: 3996.00ms
+
+20. integration - Multi-tool component analysis
+   Status: FAILED
+   Duration: 4564.00ms
+   Error: No component found at selector: .counter
+
+21. performance - Component tree extraction speed
+   Status: PASSED
+   Duration: 3539.00ms
+   Components Found: 0
+

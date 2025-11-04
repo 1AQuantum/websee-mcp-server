@@ -1,0 +1,82 @@
+{
+  "name": "websee-mcp-server",
+  "version": "1.0.0",
+  "description": "Source Intelligence Layer for WebSee - Advanced browser automation with source tracking",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp-server.d.ts",
+      "import": "./dist/mcp-server.js",
+      "require": "./dist/mcp-server.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "websee": "./dist/cli.js",
+    "websee-mcp": "./dist/mcp-server.js"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "mcp:build": "tsc && chmod +x dist/mcp-server.js",
+    "mcp:serve": "node dist/mcp-server.js",
+    "mcp:dev": "tsx watch src/mcp-server.ts",
+    "eval": "npm run build && node dist/evaluation.js",
+    "eval:dev": "tsx src/evaluation.ts"
+  },
+  "keywords": [
+    "playwright",
+    "browser-automation",
+    "source-maps",
+    "debugging",
+    "testing",
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "anthropic",
+    "claude"
+  ],
+  "author": "Your Organization",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "commander": "^11.0.0",
+    "playwright": "^1.49.0",
+    "source-map": "^0.7.4",
+    "stacktrace-js": "^2.0.2",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/websee-source-intelligence.git"
+  }
+}

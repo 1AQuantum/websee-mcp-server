@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  websee:
+    build: .
+    container_name: websee-intelligence
+    environment:
+      - NODE_ENV=production
+      - HEADLESS=true
+      - BROWSER=chromium
+    volumes:
+      - ./tests:/app/tests
+      - ./src:/app/src
+      - ./dist:/app/dist
+    command: npm test
+    network_mode: host
+
+  # Development service with hot reload
+  websee-dev:
+    build: .
+    container_name: websee-intelligence-dev
+    environment:
+      - NODE_ENV=development
+      - HEADLESS=false
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run test:watch
+    network_mode: host
