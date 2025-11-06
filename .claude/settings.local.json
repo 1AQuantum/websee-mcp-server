@@ -8,7 +8,18 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(test:*)",
       "Bash(find:*)",
-      "Bash(npm audit:*)"
+      "Bash(npm audit:*)",
+      "Bash(node tests/interceptors.test.js:*)",
+      "Bash(node -e:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:spec.modelcontextprotocol.io)",
+      "WebFetch(domain:platform.openai.com)",
+      "Bash(npm run activity:*)",
+      "Bash(npm view:*)",
+      "Bash(npm test:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

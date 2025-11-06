@@ -35,9 +35,7 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "mcp:build": "tsc && chmod +x dist/mcp-server.js",
     "mcp:serve": "node dist/mcp-server.js",
-    "mcp:dev": "tsx watch src/mcp-server.ts",
-    "eval": "npm run build && node dist/evaluation.js",
-    "eval:dev": "tsx src/evaluation.ts"
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "playwright",
@@ -51,7 +49,7 @@
     "anthropic",
     "claude"
   ],
-  "author": "Your Organization",
+  "author": "1aquantum",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
@@ -77,6 +75,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/websee-source-intelligence.git"
-  }
+    "url": "https://github.com/1aquantum/websee-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/1aquantum/websee-mcp-server/issues"
+  },
+  "homepage": "https://github.com/1aquantum/websee-mcp-server#readme"
 }

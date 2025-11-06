@@ -124,6 +124,15 @@ export class SourceIntelligenceLayer {
   }
 
   /**
+   * Clear all network traces (useful for tests)
+   */
+  clearNetworkTraces(): void {
+    if (this.networkTracer) {
+      this.networkTracer.clearTraces();
+    }
+  }
+
+  /**
    * Find module info for a file
    */
   findBuildModule(filePath: string): any {

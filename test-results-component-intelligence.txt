@@ -83,11 +83,11 @@ COMPONENT INTELLIGENCE TOOLS TEST REPORT
 ================================================================================
 
 Total Tests: 21
-Passed: 8
-Failed: 13
+Passed: 21
+Failed: 0
 Skipped: 0
-Success Rate: 38.10%
-Component Detection Rate: 0.00%
+Success Rate: 100.00%
+Component Detection Rate: 94.74%
 
 --------------------------------------------------------------------------------
 DETAILED RESULTS
@@ -95,112 +95,169 @@ DETAILED RESULTS
 
 1. component_tree - Local React Test Page
    Status: PASSED
-   Duration: 3775.00ms
-   Components Found: 0
+   Duration: 891.00ms
+   Components Found: 4
    Sample Output: {
-  "totalComponents": 0,
-  "frameworks": []
-}...
+  "totalComponents": 4,
+  "frameworks": [
+    "react"
+  ],
+  "firstComponent": {
+    "name": "App",
+    "type": "react",
+    "depth": 0,
+    "children": [],
+    "props": {},
+    "source": {
+      "f...
 
 2. component_tree - Filter by React framework
-   Status: FAILED
-   Duration: 3686.00ms
-   Error: expected [] to include 'react'
+   Status: PASSED
+   Duration: 815.00ms
+   Components Found: 4
 
 3. component_tree - Include depth information
    Status: PASSED
-   Duration: 3786.00ms
-   Components Found: 0
-   Sample Output: {}...
+   Duration: 809.00ms
+   Components Found: 4
+   Sample Output: {
+  "depthExample": 0
+}...
 
 4. component_get_props - Counter component props
-   Status: FAILED
-   Duration: 4222.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1438.00ms
+   Components Found: 1
+   Sample Output: {
+  "componentName": "Counter",
+  "propsKeys": []
+}...
 
 5. component_get_props - Non-existent selector error handling
    Status: PASSED
-   Duration: 4386.00ms
+   Duration: 1334.00ms
 
 6. component_get_state - Counter component state
-   Status: FAILED
-   Duration: 4312.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1401.00ms
+   Components Found: 1
+   Sample Output: {
+  "componentName": "Counter",
+  "hasState": true,
+  "stateKeys": [
+    "memoizedState",
+    "baseState",
+    "baseQueue",
+    "queue",
+    "next"
+  ]
+}...
 
 7. component_get_state - State changes after interaction
-   Status: FAILED
-   Duration: 4386.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 2433.00ms
+   Components Found: 1
+   Sample Output: [Object with circular references]
 
 8. component_find_by_name - Find Counter components
    Status: PASSED
-   Duration: 3386.00ms
-   Components Found: 0
-   Sample Output: {
-  "count": 0
-}...
+   Duration: 766.00ms
+   Components Found: 1
+   Sample Output: [Object with circular references]
 
 9. component_find_by_name - Find UserList components
    Status: PASSED
-   Duration: 3888.00ms
-   Components Found: 0
+   Duration: 829.00ms
+   Components Found: 1
 
 10. component_find_by_name - Non-existent component name
    Status: PASSED
-   Duration: 3560.00ms
+   Duration: 850.00ms
    Components Found: 0
 
 11. component_get_source - Counter component source mapping
-   Status: FAILED
-   Duration: 4023.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1353.00ms
+   Components Found: 1
+   Sample Output: {
+  "file": "unknown",
+  "framework": "react"
+}...
 
 12. component_get_source - Framework detection without source maps
-   Status: FAILED
-   Duration: 3811.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1411.00ms
+   Components Found: 1
 
 13. component_track_renders - Track Counter renders over 3 seconds
-   Status: FAILED
-   Duration: 4097.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 4396.00ms
+   Components Found: 1
+   Sample Output: {
+  "componentName": "Counter",
+  "totalRenders": 2,
+  "averageInterval": 517.5,
+  "sampleRenders": [
+    {
+      "timestamp": 1044.2000000178814,
+      "reason": "commit"
+    },
+    {
+      "timestam...
 
 14. component_track_renders - Track renders with 1 second duration
-   Status: FAILED
-   Duration: 3998.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 2361.00ms
+   Components Found: 1
 
 15. component_get_context - Get context values for Counter
-   Status: FAILED
-   Duration: 4178.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1347.00ms
+   Components Found: 1
+   Sample Output: {
+  "contextCount": 0,
+  "contexts": []
+}...
 
 16. component_get_context - Handle components without context
-   Status: FAILED
-   Duration: 4033.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1357.00ms
+   Components Found: 1
 
 17. component_get_hooks - Get hooks for Counter
-   Status: FAILED
-   Duration: 4045.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1405.00ms
+   Components Found: 1
+   Sample Output: {
+  "hookCount": 0,
+  "hooks": []
+}...
 
 18. component_get_hooks - Identify hook types
-   Status: FAILED
-   Duration: 4017.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 1359.00ms
+   Components Found: 1
 
 19. component_get_hooks - Error handling for non-React components
    Status: PASSED
-   Duration: 3996.00ms
+   Duration: 1368.00ms
 
 20. integration - Multi-tool component analysis
-   Status: FAILED
-   Duration: 4564.00ms
-   Error: No component found at selector: .counter
+   Status: PASSED
+   Duration: 3549.00ms
+   Components Found: 4
+   Sample Output: {
+  "totalComponents": 4,
+  "componentName": "Counter",
+  "propsKeys": [],
+  "hasState": true,
+  "sourceFile": "unknown",
+  "framework": "react",
+  "hookCount": 0
+}...
 
 21. performance - Component tree extraction speed
    Status: PASSED
-   Duration: 3539.00ms
-   Components Found: 0
+   Duration: 835.00ms
+   Components Found: 4
 

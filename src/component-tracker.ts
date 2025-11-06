@@ -30,14 +30,77 @@ export class ComponentTracker {
     this.componentCache.clear();
     this.domToComponentMap.clear();
 
-    // Inject tracking hooks into the page
+    // Install DevTools hook BEFORE page loads (critical for React detection)
+    await this.installDevToolsHook();
+  }
+
+  private async installDevToolsHook(): Promise<void> {
+    if (!this.page) throw new Error('Page not initialized');
+
+    // This needs to run BEFORE React loads, so we use addInitScript
+    await this.page.addInitScript(() => {
+      // Install minimal React DevTools hook if not present
+      if (!(window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+        const hook: any = {
+          renderers: new Map(),
+          supportsFiber: true,
+          inject(renderer: any) {
+            const id = Math.random().toString(36).slice(2);
+            this.renderers.set(id, renderer);
+            console.log('[WebSee] Renderer registered:', id);
+            return id;
+          },
+          onCommitFiberRoot(_rendererID: any, root: any) {
+            // Track render time
+            if ((window as any).__COMPONENT_TRACKER__ && root?.current) {
+              (window as any).__COMPONENT_TRACKER__.lastRenderTimes.set('react', performance.now());
+            }
+          },
+          onCommitFiberUnmount() {},
+          getFiberRoots(_rendererID: string) {
+            const roots: any[] = [];
+            // Find React roots in the DOM
+            const rootElements = document.querySelectorAll('[data-reactroot], #root, [id*="root"]');
+            rootElements.forEach(el => {
+              const fiberKey = Object.keys(el).find(
+                key => key.startsWith('__reactFiber') || key.startsWith('__reactInternalInstance') || key.startsWith('__reactContainer')
+              );
+              if (fiberKey) {
+                let fiber = (el as any)[fiberKey];
+                if (fiber) {
+                  // In React 18+, __reactContainer points to a HostRoot fiber
+                  // The stateNode property contains the FiberRoot which has the current property
+                  if (fiberKey.startsWith('__reactContainer') && fiber.stateNode && fiber.stateNode.current) {
+                    roots.push({ current: fiber.stateNode.current });
+                  } else {
+                    // For older React versions, navigate to the root fiber
+                    let current = fiber;
+                    while (current.return) {
+                      current = current.return;
+                    }
+                    roots.push({ current });
+                  }
+                }
+              }
+            });
+            return roots;
+          }
+        };
+
+        (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = hook;
+        console.log('[WebSee] React DevTools hook installed before page load');
+      }
+    });
+
+    // Also inject tracking hooks that need to run after page content loads
     await this.injectTrackingHooks();
   }
 
   private async injectTrackingHooks(): Promise<void> {
     if (!this.page) throw new Error('Page not initialized');
 
-    await this.page.evaluate(() => {
+    // Use addInitScript to ensure it runs before page loads
+    await this.page.addInitScript(() => {
       // Create global tracking object
       (window as any).__COMPONENT_TRACKER__ = {
         components: new Map(),
@@ -45,43 +108,6 @@ export class ComponentTracker {
         renderCounts: new Map(),
         lastRenderTimes: new Map(),
       };
-
-      // Hook into React DevTools if available
-      if ((window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__) {
-        const hook = (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
-        const tracker = (window as any).__COMPONENT_TRACKER__;
-
-        // Patch onCommitFiberRoot to track renders
-        const originalOnCommit = hook.onCommitFiberRoot;
-        hook.onCommitFiberRoot = function (...args: any[]) {
-          if (originalOnCommit) {
-            originalOnCommit.apply(this, args);
-          }
-          // Track render time
-          const root = args[1];
-          if (root && root.current) {
-            tracker.lastRenderTimes.set('react', performance.now());
-          }
-        };
-      }
-
-      // Hook into Vue 3 if available
-      if ((window as any).Vue || (window as any).app) {
-        const vue = (window as any).Vue || (window as any).app?.config?.globalProperties?.Vue;
-        if (vue && vue.version?.startsWith('3')) {
-          const tracker = (window as any).__COMPONENT_TRACKER__;
-          // Track Vue 3 component updates
-          if ((window as any).app?.__app_context__) {
-            tracker.lastRenderTimes.set('vue', performance.now());
-          }
-        }
-      }
-
-      // Hook into Angular if available
-      if ((window as any).ng?.probe) {
-        const tracker = (window as any).__COMPONENT_TRACKER__;
-        tracker.lastRenderTimes.set('angular', performance.now());
-      }
     });
   }
 
@@ -129,48 +155,84 @@ export class ComponentTracker {
       try {
         // Try to access React DevTools hook
         const hook = (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
-        if (!hook || !hook.renderers || hook.renderers.size === 0) {
+
+        // Fallback: Direct fiber detection from DOM if hook doesn't have renderers
+        let roots: any[] = [];
+
+        if (hook && typeof hook.getFiberRoots === 'function') {
+          // Use hook's getFiberRoots method
+          roots = hook.getFiberRoots('') || [];
+        }
+
+        // Fallback: Manual fiber detection from DOM
+        if (roots.length === 0) {
+          console.log('[WebSee] Using fallback fiber detection from DOM');
+          const rootElements = document.querySelectorAll('[data-reactroot], #root, [id*="root"], [class*="root"]');
+          rootElements.forEach(el => {
+            const fiberKey = Object.keys(el).find(
+              key => key.startsWith('__reactFiber') || key.startsWith('__reactInternalInstance') || key.startsWith('__reactContainer')
+            );
+            if (fiberKey) {
+              let fiber = (el as any)[fiberKey];
+              if (fiber) {
+                // In React 18+, __reactContainer points to a HostRoot fiber
+                // The stateNode property contains the FiberRoot which has the current property
+                if (fiberKey.startsWith('__reactContainer') && fiber.stateNode && fiber.stateNode.current) {
+                  console.log('[WebSee] Found React 18+ container, using stateNode.current');
+                  roots.push({ current: fiber.stateNode.current });
+                } else {
+                  // For older React versions, navigate to the root fiber
+                  while (fiber.return) {
+                    fiber = fiber.return;
+                  }
+                  roots.push({ current: fiber });
+                }
+              }
+            }
+          });
+        }
+
+        if (roots.length === 0) {
+          console.warn('[WebSee] No React roots found');
           return components;
         }
 
-        // Iterate through React renderers
-        hook.renderers.forEach((renderer: any) => {
-          if (!renderer || !renderer.getCurrentFiber) return;
+        console.log(`[WebSee] Found ${roots.length} React root(s)`);
 
-          // Find root fiber
-          const roots = (hook as any).getFiberRoots?.(renderer.version) || [];
-          roots.forEach((root: any) => {
-            if (!root.current) return;
+        // Process each root
+        roots.forEach((root: any) => {
+          if (!root.current) return;
 
-            const visitedFibers = new WeakSet();
-            const walkFiber = (fiber: any, parentName?: string) => {
-              if (!fiber || visitedFibers.has(fiber)) return;
-              visitedFibers.add(fiber);
+          const visitedFibers = new WeakSet();
+          const walkFiber = (fiber: any, parentName?: string) => {
+            if (!fiber || visitedFibers.has(fiber)) return;
+            visitedFibers.add(fiber);
 
-              const compInfo = extractComponentFromFiber(fiber, parentName, tracker);
-              if (compInfo) {
-                components.push(compInfo);
+            const compInfo = extractComponentFromFiber(fiber, parentName, tracker);
+            if (compInfo) {
+              components.push(compInfo);
 
-                // Walk children
-                let child = fiber.child;
-                while (child) {
-                  walkFiber(child, compInfo.name);
-                  child = child.sibling;
-                }
-              } else if (fiber.child) {
-                walkFiber(fiber.child, parentName);
+              // Walk children
+              let child = fiber.child;
+              while (child) {
+                walkFiber(child, compInfo.name);
+                child = child.sibling;
               }
+            } else if (fiber.child) {
+              walkFiber(fiber.child, parentName);
+            }
 
-              if (fiber.sibling) {
-                walkFiber(fiber.sibling, parentName);
-              }
-            };
+            if (fiber.sibling) {
+              walkFiber(fiber.sibling, parentName);
+            }
+          };
 
-            walkFiber(root.current);
-          });
+          walkFiber(root.current);
         });
+
+        console.log(`[WebSee] Extracted ${components.length} React components`);
       } catch (e) {
-        console.warn('React component extraction error:', e);
+        console.error('[WebSee] React component extraction error:', e);
       }
 
       function extractComponentFromFiber(
@@ -193,10 +255,32 @@ export class ComponentTracker {
           }
 
           const domNodes: string[] = [];
-          const stateNode = fiber.stateNode;
-          if (stateNode && stateNode instanceof Element) {
-            const id = stateNode.id || `react-${Math.random().toString(36).substr(2, 9)}`;
-            if (!stateNode.id) stateNode.id = id;
+
+          // Find DOM nodes for this component
+          // For function components, we need to traverse children to find DOM nodes
+          const findDOMNode = (f: any): Element | null => {
+            if (!f) return null;
+
+            // If this fiber has a DOM node (HostComponent), use it
+            if (f.stateNode && f.stateNode instanceof Element) {
+              return f.stateNode;
+            }
+
+            // Otherwise, traverse to children to find the first DOM node
+            let child = f.child;
+            while (child) {
+              const found = findDOMNode(child);
+              if (found) return found;
+              child = child.sibling;
+            }
+
+            return null;
+          };
+
+          const domNode = findDOMNode(fiber);
+          if (domNode) {
+            const id = domNode.id || `react-${Math.random().toString(36).substr(2, 9)}`;
+            if (!domNode.id) domNode.id = id;
             domNodes.push(id);
           }
 

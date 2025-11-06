@@ -27,7 +27,7 @@ describe("NetworkTracer", () => {
     tracer = new NetworkTracer();
 
     // Set up a basic HTML page to avoid URL parsing errors
-    await page.goto("data:text/html,<html><body><h1>Test Page</h1></body></html>");
+    await page.goto("http://localhost:3000");
   });
 
   afterEach(async () => {
@@ -322,7 +322,7 @@ describe("NetworkTracer Error Handling", () => {
     tracer = new NetworkTracer();
 
     // Set up a basic HTML page to avoid URL parsing errors
-    await page.goto("data:text/html,<html><body><h1>Test Page</h1></body></html>");
+    await page.goto("http://localhost:3000");
   });
 
   afterEach(async () => {

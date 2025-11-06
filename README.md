@@ -35,45 +35,83 @@ npm run setup
 
 ### MCP Server Setup
 
-Choose your preferred Claude environment:
+Choose your preferred AI development environment:
 
-#### Option A: Claude Code (VS Code Extension)
+#### Option A: Claude Code (2025 Method)
 
 1. **Build the MCP server**:
 ```bash
 npm run build
 ```
 
-2. **Add to Claude Code** (choose one method):
-
-**Quick CLI Method:**
+2. **Add to Claude Code** using the CLI (recommended for STDIO transport):
 ```bash
-claude mcp add-json websee '{
-  "command": "node",
-  "args": ["'$(pwd)'/dist/mcp-server.js"],
-  "env": {"BROWSER": "chromium", "HEADLESS": "true"}
-}'
+cd /path/to/websee-source-intelligence-production
+claude mcp add --transport stdio websee --env BROWSER=chromium --env HEADLESS=true -- node dist/mcp-server.js
 ```
 
-**Project Method** (for team sharing):
+**Alternative: Project-Level Configuration** (for team sharing):
 Create `.mcp.json` in your project root:
 ```json
 {
+  "$schema": "https://anthropic.com/schemas/mcp-config.json",
   "mcpServers": {
     "websee": {
       "command": "node",
-      "args": ["${WEBSEE_PATH:-/absolute/path/to/dist/mcp-server.js}"],
-      "env": {"BROWSER": "chromium", "HEADLESS": "true"}
+      "args": ["dist/mcp-server.js"],
+      "env": {
+        "BROWSER": "${BROWSER:-chromium}",
+        "HEADLESS": "${HEADLESS:-true}",
+        "PROJECT_ROOT": "${PROJECT_ROOT:-.}"
+      }
     }
   }
 }
 ```
 
-3. **Verify**: Ask Claude "What MCP tools do you have?"
+3. **Verify**:
+```bash
+claude mcp list
+# or ask Claude: "What MCP tools do you have?"
+```
 
-📖 **Detailed guide**: See [CLAUDE_CODE_SETUP.md](./CLAUDE_CODE_SETUP.md)
+**Configuration Scopes:**
+- `--scope local` (default): Private to you
+- `--scope project`: Team sharing via `.mcp.json`
+- `--scope user`: Available across all projects
 
-#### Option B: Claude Desktop
+#### Option B: Cursor IDE (2025 Method)
+
+1. **Build the MCP server**:
+```bash
+npm run build
+```
+
+2. **Configure Cursor**:
+
+Create `.cursor/mcp.json` in your project root:
+```json
+{
+  "$schema": "https://anthropic.com/schemas/mcp-config.json",
+  "mcpServers": {
+    "websee": {
+      "command": "node",
+      "args": ["dist/mcp-server.js"],
+      "env": {
+        "BROWSER": "chromium",
+        "HEADLESS": "true",
+        "PROJECT_ROOT": "."
+      }
+    }
+  }
+}
+```
+
+3. **Access Settings**: Open Cursor settings (`Ctrl+Shift+P` → "Cursor Settings") and check the MCP section
+
+**Note**: Cursor supports up to 40 tools simultaneously. WebSee provides 36 tools optimized for frontend debugging.
+
+#### Option C: Claude Desktop (Traditional)
 
 1. **Build the MCP server**:
 ```bash
@@ -102,11 +140,7 @@ npm run build
 }
 ```
 
-3. **Restart Claude Desktop**
-
-4. **Verify** - Look for the hammer icon to see available WebSee tools
-
-📖 **Detailed guide**: See [CLAUDE_DESKTOP_SETUP.md](./CLAUDE_DESKTOP_SETUP.md)
+3. **Restart Claude Desktop** and verify with the hammer icon
 
 ### Example Usage with Claude
 
@@ -256,7 +290,7 @@ WebSee provides six powerful MCP tools for frontend debugging:
 5. **analyze_bundle_size** - Analyze JavaScript bundle size and identify large modules
 6. **resolve_minified_error** - Resolve minified error stack traces to original source code
 
-For detailed documentation on each tool, see [MCP_TOOLS.md](./MCP_TOOLS.md)
+For detailed parameter documentation, use `/mcp` in Claude Code or ask Claude to describe each tool
 
 ## Configuration
 
@@ -535,38 +569,15 @@ npx playwright install chromium
 ### Getting Help
 
 If you encounter issues:
-1. Check the [MCP_TOOLS.md](./MCP_TOOLS.md) documentation
-2. Review [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) for implementation details
+1. Check the troubleshooting section above
+2. Verify your configuration with `claude mcp list` or `claude mcp get websee`
 3. Open an issue on GitHub with:
-   - Your Claude Desktop config
+   - Your MCP configuration
    - MCP server logs
    - Browser console errors
    - Steps to reproduce
 
 ## Documentation
-
-### Essential Guides
-- **[MCP Tools Reference](./MCP_TOOLS.md)** - Detailed documentation for each MCP tool with examples
-- **[Developer Guide](./DEVELOPER_GUIDE.md)** - How to extend WebSee and contribute
-- **[Frontend Development Guide](./FRONTEND_DEVELOPMENT_GUIDE.md)** - Guide for frontend developers
-- **[Claude Code Setup](./CLAUDE_CODE_SETUP.md)** - Complete setup guide for Claude Code
-- **[Claude Desktop Setup](./CLAUDE_DESKTOP_SETUP.md)** - Complete setup guide for Claude Desktop
-- **[Project Structure](./PROJECT_STRUCTURE.md)** - Complete file and directory reference
-
-### AI Agent Skill
-
-WebSee includes a complete **[AI Agent Skill](./skills/websee-frontend-debugger/)** that teaches agents how to fully exploit all MCP tools:
-
-- **SKILL.md** - Core debugging workflows and tool selection
-- **tool-schemas.md** - Complete parameter documentation
-- **debugging-playbook.md** - 8 real-world scenarios with solutions
-- **advanced-techniques.md** - 14 expert techniques for maximum effectiveness
-
-The skill follows [Anthropic's skill-creator](https://github.com/anthropics/skills) format and enables agents to:
-- Choose the right tool for each problem
-- Chain tools for deep investigation
-- Follow complete debugging workflows
-- Apply advanced techniques like cross-tool correlation and temporal analysis
 
 ### What You Can Do with WebSee
 - **Debug production errors** - See original source code instead of minified JavaScript
@@ -584,11 +595,18 @@ The skill follows [Anthropic's skill-creator](https://github.com/anthropics/skil
 
 ## Contributing
 
-We welcome contributions! Please see [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) for:
-- How to add new MCP tools
-- Testing procedures
-- Code style guidelines
-- Contribution workflow
+We welcome contributions! To contribute:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Run `npm test` to verify
+5. Submit a pull request
+
+Please ensure:
+- All tests pass
+- Code follows TypeScript best practices
+- New tools include comprehensive tests
+- Documentation is updated
 
 ## License
 

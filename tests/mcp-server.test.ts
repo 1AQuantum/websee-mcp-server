@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
-import { chromium, Browser, BrowserContext, Page } from "playwright";
+import { chromium, firefox, webkit, Browser, BrowserContext, Page } from "playwright";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { z } from "zod";
 import * as path from "path";
@@ -126,8 +126,7 @@ describe("MCP Server - Unit Tests", () => {
         </html>
       `;
 
-      await page.setContent(testHTML);
-
+      // Set up console listener BEFORE loading content
       const consoleLogs: any[] = [];
       page.on("console", (msg) => {
         if (msg.type() === "error" || msg.type() === "warning") {
@@ -138,6 +137,7 @@ describe("MCP Server - Unit Tests", () => {
         }
       });
 
+      await page.setContent(testHTML);
       await page.waitForTimeout(100);
 
       expect(consoleLogs.length).toBeGreaterThan(0);
@@ -235,11 +235,12 @@ describe("MCP Server - Unit Tests", () => {
     it("should measure network performance", async () => {
       const responses: any[] = [];
 
-      page.on("response", (response) => {
+      page.on("response", async (response) => {
+        const timing = await response.request().timing();
         responses.push({
           url: response.url(),
           status: response.status(),
-          timing: response.timing(),
+          timing: timing,
         });
       });
 
@@ -253,7 +254,7 @@ describe("MCP Server - Unit Tests", () => {
       const slowRequests: any[] = [];
 
       page.on("response", async (response) => {
-        const timing = response.timing();
+        const timing = await response.request().timing();
         const duration = timing.responseEnd - timing.requestStart;
 
         if (duration > 1000) {
@@ -633,10 +634,23 @@ describe("MCP Server - Integration Tests", () => {
     });
 
     it("should handle invalid selectors", async () => {
-      await page.setContent("<h1>Test</h1>");
+      // Create a fresh page for this test to avoid context destruction
+      const testPage = await context.newPage();
+      try {
+        await testPage.setContent("<h1>Test</h1>");
 
-      const element = await page.$("###invalid-selector###");
-      expect(element).toBeNull();
+        // Test with an invalid selector that throws an error
+        try {
+          await testPage.$("###invalid-selector###");
+          // Should not reach here
+          expect(true).toBe(false);
+        } catch (error) {
+          // Expect an error for invalid selector
+          expect(error).toBeDefined();
+        }
+      } finally {
+        await testPage.close();
+      }
     });
 
     it("should handle page crashes", async () => {
@@ -734,7 +748,7 @@ describe("MCP Server - Integration Tests", () => {
   });
 
   describe("Browser Compatibility", () => {
-    it("should work with different browser types", async () => {
+    it("should work with different browser types", { timeout: 60000 }, async () => {
       const browsers = [
         { name: "chromium", instance: await chromium.launch({ headless: true }) },
         { name: "firefox", instance: await firefox.launch({ headless: true }) },

@@ -102,6 +102,76 @@ export interface NetworkBody {
 
 // ==================== Helper Functions ====================
 
+// Global storage for page-level network data
+const pageNetworkData = new WeakMap<Page, {
+  intelligence: SourceIntelligenceLayer;
+  requestMap: Map<string, any>;
+  responseMap: Map<string, any>;
+  listenersInstalled: boolean;
+}>();
+
+/**
+ * Get or create network tracking data for a page
+ */
+async function getOrCreateNetworkTracking(page: Page): Promise<{
+  intelligence: SourceIntelligenceLayer;
+  requestMap: Map<string, any>;
+  responseMap: Map<string, any>;
+}> {
+  let data = pageNetworkData.get(page);
+
+  if (!data) {
+    // Create new tracking data for this page
+    const intelligence = new SourceIntelligenceLayer();
+    const requestMap = new Map<string, any>();
+    const responseMap = new Map<string, any>();
+
+    // Set up Playwright event listeners FIRST (these capture ALL requests)
+    page.on('request', request => {
+      requestMap.set(request.url(), {
+        url: request.url(),
+        method: request.method(),
+        headers: request.headers(),
+        postData: request.postData(),
+        resourceType: request.resourceType(),
+        timestamp: Date.now(),
+      });
+    });
+
+    page.on('response', async response => {
+      const request = response.request();
+      const timing = request.timing();
+
+      // Capture response body
+      let body: string | null = null;
+      try {
+        const buffer = await response.body();
+        body = buffer.toString('utf-8');
+      } catch (error) {
+        // Response body might not be available for some requests (redirects, etc.)
+        body = null;
+      }
+
+      responseMap.set(response.url(), {
+        url: response.url(),
+        status: response.status(),
+        statusText: response.statusText(),
+        headers: response.headers(),
+        timing: timing,
+        body: body,
+      });
+    });
+
+    // Initialize intelligence layer (sets up network tracer)
+    await intelligence.initialize(page);
+
+    data = { intelligence, requestMap, responseMap, listenersInstalled: true };
+    pageNetworkData.set(page, data);
+  }
+
+  return data;
+}
+
 /**
  * Enhanced page initialization with network tracking
  */
@@ -114,40 +184,36 @@ async function initializePageWithNetworkTracking(
   requestMap: Map<string, any>;
   responseMap: Map<string, any>;
 }> {
-  const intelligence = new SourceIntelligenceLayer();
-  await intelligence.initialize(page);
+  // Get or create tracking (this ensures we capture requests even if tool is called late)
+  const { intelligence, requestMap, responseMap } = await getOrCreateNetworkTracking(page);
 
-  const requestMap = new Map<string, any>();
-  const responseMap = new Map<string, any>();
+  // Only navigate if we're not already at the target URL
+  // This prevents double-navigations and capturing unwanted requests
+  const currentUrl = page.url();
+  if (currentUrl !== url) {
+    // Clear existing data before navigation to avoid pollution
+    requestMap.clear();
+    responseMap.clear();
+    intelligence.clearNetworkTraces();
 
-  // Track all network requests with enhanced data
-  page.on('request', request => {
-    requestMap.set(request.url(), {
-      url: request.url(),
-      method: request.method(),
-      headers: request.headers(),
-      postData: request.postData(),
-      resourceType: request.resourceType(),
-      timestamp: Date.now(),
-    });
-  });
+    await page.goto(url, { waitUntil: 'networkidle' });
+  }
 
-  page.on('response', async response => {
-    const request = response.request();
-    const timing = request.timing();
-    responseMap.set(response.url(), {
-      url: response.url(),
-      status: response.status(),
-      statusText: response.statusText(),
-      headers: response.headers(),
-      timing: timing,
-    });
-  });
-
-  await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForTimeout(waitTime);
 
   return { intelligence, requestMap, responseMap };
+}
+
+/**
+ * Clear network tracking data for a page (useful for tests)
+ */
+export function clearNetworkData(page: Page): void {
+  const data = pageNetworkData.get(page);
+  if (data) {
+    data.requestMap.clear();
+    data.responseMap.clear();
+    data.intelligence.clearNetworkTraces();
+  }
 }
 
 /**
@@ -210,14 +276,36 @@ export async function networkGetRequests(
 
   const traces = intelligence.getNetworkTraces();
   const requests: NetworkRequest[] = [];
+  const processedUrls = new Set<string>();
 
-  // Combine data from intelligence layer and Playwright
+  // Helper to normalize URLs for comparison (resolve relative to absolute)
+  const normalizeUrl = (url: string): string => {
+    try {
+      // If it's already absolute, return as-is
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      // If it's relative, try to resolve it against page URL
+      const pageUrl = page.url();
+      if (pageUrl && pageUrl !== 'about:blank') {
+        return new URL(url, pageUrl).href;
+      }
+      return url;
+    } catch {
+      return url;
+    }
+  };
+
+  // First, add all traces from intelligence layer (these have stack traces)
   for (const trace of traces) {
-    const requestData = requestMap.get(trace.url);
-    const responseData = responseMap.get(trace.url);
+    const normalizedTraceUrl = normalizeUrl(trace.url);
+
+    // Try to find matching request/response data by both original and normalized URL
+    const requestData = requestMap.get(trace.url) || requestMap.get(normalizedTraceUrl);
+    const responseData = responseMap.get(trace.url) || responseMap.get(normalizedTraceUrl);
 
     requests.push({
-      url: trace.url,
+      url: trace.url,  // Keep the original URL format from the trace
       method: trace.method,
       status: trace.status || responseData?.status,
       duration: trace.duration,
@@ -230,6 +318,33 @@ export async function networkGetRequests(
       requestHeaders: requestData?.headers,
       responseHeaders: responseData?.headers,
     });
+
+    // Mark both URLs as processed to avoid duplicates
+    processedUrls.add(trace.url);
+    processedUrls.add(normalizedTraceUrl);
+  }
+
+  // Then, add requests from Playwright that weren't captured by intelligence layer
+  // This handles cases where the page was loaded before network tracing was initialized
+  for (const [url, requestData] of requestMap.entries()) {
+    if (!processedUrls.has(url)) {
+      const responseData = responseMap.get(url);
+      requests.push({
+        url: url,
+        method: requestData.method,
+        status: responseData?.status,
+        duration: responseData?.timing
+          ? responseData.timing.responseEnd - responseData.timing.requestStart
+          : undefined,
+        size: responseData?.headers?.['content-length']
+          ? parseInt(responseData.headers['content-length'])
+          : undefined,
+        timestamp: requestData.timestamp,
+        requestHeaders: requestData.headers,
+        responseHeaders: responseData?.headers,
+      });
+      processedUrls.add(url);
+    }
   }
 
   return { requests };
@@ -268,27 +383,21 @@ export async function networkGetTiming(
   page: Page,
   params: z.infer<typeof NetworkGetTimingSchema>
 ): Promise<NetworkTiming | { error: string }> {
-  const timingMap = new Map<string, any>();
+  // Use existing tracking data instead of creating new listeners
+  const { responseMap } = await getOrCreateNetworkTracking(page);
 
-  page.on('response', async response => {
-    if (response.url() === params.requestUrl) {
-      const request = response.request();
-      timingMap.set(response.url(), request.timing());
-    }
-  });
+  // Wait briefly for any pending responses
+  await page.waitForTimeout(500);
 
-  await page.goto(params.url, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  const responseData = responseMap.get(params.requestUrl);
 
-  const timing = timingMap.get(params.requestUrl);
-
-  if (!timing) {
+  if (!responseData || !responseData.timing) {
     return {
       error: `Request not found: ${params.requestUrl}`,
     };
   }
 
-  return calculateTiming(timing);
+  return calculateTiming(responseData.timing);
 }
 
 /**
@@ -298,11 +407,11 @@ export async function networkTraceInitiator(
   page: Page,
   params: z.infer<typeof NetworkTraceInitiatorSchema>
 ): Promise<InitiatorTrace | { error: string }> {
-  const intelligence = new SourceIntelligenceLayer();
-  await intelligence.initialize(page);
+  // Use existing intelligence layer
+  const { intelligence } = await getOrCreateNetworkTracking(page);
 
-  await page.goto(params.url, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  // Wait briefly for any pending traces
+  await page.waitForTimeout(500);
 
   const traces = intelligence.getNetworkTraces();
   const targetTrace = traces.find(t => t.url === params.requestUrl);
@@ -346,36 +455,24 @@ export async function networkGetHeaders(
   page: Page,
   params: z.infer<typeof NetworkGetHeadersSchema>
 ): Promise<NetworkHeaders | { error: string }> {
-  let requestHeaders: Record<string, string> = {};
-  let responseHeaders: Record<string, string> = {};
-  let found = false;
+  // Use existing tracking data
+  const { requestMap, responseMap } = await getOrCreateNetworkTracking(page);
 
-  page.on('request', request => {
-    if (request.url() === params.requestUrl) {
-      requestHeaders = request.headers();
-      found = true;
-    }
-  });
+  // Wait briefly for any pending data
+  await page.waitForTimeout(500);
 
-  page.on('response', response => {
-    if (response.url() === params.requestUrl) {
-      responseHeaders = response.headers();
-      found = true;
-    }
-  });
+  const requestData = requestMap.get(params.requestUrl);
+  const responseData = responseMap.get(params.requestUrl);
 
-  await page.goto(params.url, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
-
-  if (!found) {
+  if (!requestData && !responseData) {
     return {
       error: `Request not found: ${params.requestUrl}`,
     };
   }
 
   return {
-    requestHeaders,
-    responseHeaders,
+    requestHeaders: requestData?.headers || {},
+    responseHeaders: responseData?.headers || {},
   };
 }
 
@@ -386,45 +483,27 @@ export async function networkGetBody(
   page: Page,
   params: z.infer<typeof NetworkGetBodySchema>
 ): Promise<NetworkBody | { error: string }> {
-  let requestBody: string | null = null;
-  let responseBody: string | null = null;
-  let contentType = '';
-  let found = false;
+  // Use existing tracking data
+  const { requestMap, responseMap } = await getOrCreateNetworkTracking(page);
 
-  page.on('request', request => {
-    if (request.url() === params.requestUrl) {
-      requestBody = request.postData() || null;
-      found = true;
-    }
-  });
+  // Wait briefly for any pending data
+  await page.waitForTimeout(500);
 
-  page.on('response', async response => {
-    if (response.url() === params.requestUrl) {
-      try {
-        const buffer = await response.body();
-        responseBody = buffer.toString('utf-8');
-        contentType = response.headers()['content-type'] || '';
-        found = true;
-      } catch (error) {
-        // Response body might not be available for some requests
-        responseBody = null;
-      }
-    }
-  });
+  const requestData = requestMap.get(params.requestUrl);
+  const responseData = responseMap.get(params.requestUrl);
 
-  await page.goto(params.url, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
-
-  if (!found) {
+  if (!requestData && !responseData) {
     return {
       error: `Request not found: ${params.requestUrl}`,
     };
   }
 
+  const contentType = responseData?.headers?.['content-type'] || '';
+
   return {
-    requestBody,
-    responseBody,
-    contentType,
+    requestBody: requestData?.postData || null,
+    responseBody: responseData?.body || null,
+    contentType: contentType,
   };
 }
 

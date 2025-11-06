@@ -39,8 +39,13 @@ export class NetworkTracer {
    * Initialize the network tracer with a Playwright page
    */
   async initialize(page: Page): Promise<void> {
-    // Inject network interception script into the page
-    await page.addInitScript(() => {
+    // Define the interception script as a function we can reuse
+    const interceptionScript = () => {
+      // Check if already installed to avoid double-wrapping
+      if ((window as any).__websee_interceptors_installed) {
+        return;
+      }
+
       // Store original functions
       const originalFetch = window.fetch;
       const originalXHROpen = XMLHttpRequest.prototype.open;
@@ -159,14 +164,42 @@ export class NetworkTracer {
 
         return originalXHRSend.apply(this, args);
       };
-    });
+
+      // Mark as installed
+      (window as any).__websee_interceptors_installed = true;
+    };
+
+    // Inject the interception script for future page loads
+    await page.addInitScript(interceptionScript);
+
+    // Also inject it into the current page if it's already loaded
+    const isAlreadyInjected = await page.evaluate(() => {
+      return (window as any).__websee_interceptors_installed === true;
+    }).catch(() => false);
+
+    if (!isAlreadyInjected) {
+      await page.evaluate(interceptionScript);
+    }
 
     // Listen for network events
-    await page.exposeFunction('__websee_network_handler', (event: any) => {
-      this.handleNetworkEvent(event);
-    });
+    // Check if the function is already exposed to avoid duplicate registration
+    const isHandlerExposed = await page.evaluate(() => {
+      return typeof (window as any).__websee_network_handler === 'function';
+    }).catch(() => false);
 
-    await page.addInitScript(() => {
+    if (!isHandlerExposed) {
+      await page.exposeFunction('__websee_network_handler', (event: any) => {
+        this.handleNetworkEvent(event);
+      });
+    }
+
+    // Set up event listeners via addInitScript for future pages
+    const listenerScript = () => {
+      // Check if already installed
+      if ((window as any).__websee_listeners_installed) {
+        return;
+      }
+
       ['__websee_network_start', '__websee_network_complete', '__websee_network_error'].forEach(
         eventName => {
           window.addEventListener(eventName, (e: any) => {
@@ -174,14 +207,30 @@ export class NetworkTracer {
           });
         }
       );
-    });
+
+      // Mark as installed
+      (window as any).__websee_listeners_installed = true;
+    };
+
+    await page.addInitScript(listenerScript);
+
+    // Also set up event listeners for the current page if needed
+    const listenersInstalled = await page.evaluate(() => {
+      return (window as any).__websee_listeners_installed === true;
+    }).catch(() => false);
+
+    if (!listenersInstalled) {
+      await page.evaluate(listenerScript);
+    }
   }
 
   /**
    * Handle network events from the page
    */
   private handleNetworkEvent(event: any): void {
-    if (!event.url) return;
+    if (!event.url) {
+      return;
+    }
 
     const key = `${event.method}_${event.url}_${event.timestamp}`;
 

@@ -135,7 +135,12 @@ class ComponentIntelligenceTestRunner {
         report += `   Error: ${result.error}\n`;
       }
       if (result.sampleOutput) {
-        report += `   Sample Output: ${JSON.stringify(result.sampleOutput, null, 2).substring(0, 200)}...\n`;
+        try {
+          report += `   Sample Output: ${JSON.stringify(result.sampleOutput, null, 2).substring(0, 200)}...\n`;
+        } catch (error) {
+          // Handle circular references
+          report += `   Sample Output: [Object with circular references]\n`;
+        }
       }
       report += '\n';
     });

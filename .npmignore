@@ -1,0 +1,69 @@
+# Development files
+src/
+tests/
+test-pages/
+scripts/setup.js
+
+# Development-only compiled files in dist/
+dist/evaluation.js
+dist/evaluation.d.ts
+dist/evaluation.js.map
+dist/evaluation.d.ts.map
+
+# Test configuration
+vitest.config.ts
+.eslintrc.json
+.prettierrc
+
+# IDE and editor files
+.vscode/
+.cursor/
+.claude/
+.idea/
+
+# Test results and artifacts
+coverage/
+*.test.ts
+*.spec.ts
+test-*.txt
+test-*.json
+
+# Development configs
+.env
+.env.*
+!.env.example
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Documentation (keep README.md)
+DEPLOYMENT.md
+*.md
+!README.md
+
+# Docker (development only)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# MCP configs (project-specific)
+.mcp.json
+claude_desktop_config.json

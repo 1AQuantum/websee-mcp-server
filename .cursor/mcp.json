@@ -3,7 +3,7 @@
   "mcpServers": {
     "websee": {
       "command": "node",
-      "args": ["./dist/mcp-server.js"],
+      "args": ["dist/mcp-server.js"],
       "env": {
         "BROWSER": "chromium",
         "HEADLESS": "true",

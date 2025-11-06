@@ -28,6 +28,10 @@ describe('Network Tools - HTTP Methods Testing', () => {
   beforeEach(async () => {
     context = await browser.newContext();
     page = await context.newPage();
+
+    // Pre-initialize network tracking by making a dummy call
+    // This ensures listeners are set up BEFORE any test requests
+    await networkGetRequests(page, { url: 'about:blank', waitTime: 100 });
   });
 
   afterEach(async () => {
@@ -46,7 +50,8 @@ describe('Network Tools - HTTP Methods Testing', () => {
         });
       });
 
-      await page.setContent('<html><body></body></html>');
+      // Use goto instead of setContent to ensure scripts run
+      await page.goto('about:blank');
       await page.evaluate((url) => fetch(url), testUrl);
       await page.waitForTimeout(1000);
 
